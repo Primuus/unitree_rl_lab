@@ -80,3 +80,5 @@ conda run -n RL python -B -m unittest test_deployment -v
 Isaac 评估记录保留于服务器 `logs/evaluation/stage1_continue_final_1998.*`；MuJoCo 正式评估记录留在本机 `outputs/balance_continue1998_20s.json`。后续可直接替换同观测/动作契约的策略文件观看新结果。
 
 上一轮 model_999 的策略保留于 `models/stage1_balance/`，历史 MuJoCo 记录为 `outputs/balance_20s.json`。可用 `./run.sh --policy models/stage1_balance/exported/policy.pt` 对照查看。
+
+视觉适配显式设置 `type="mesh"`，保留参考 XML 的网格类型；移除默认类时不能丢失该属性，否则外观会被渲染为球体。已检查 33 个视觉网格，并确认修正前后的 20 秒物理轨迹完全一致。

@@ -53,6 +53,9 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(model.nu, 12)
         self.assertEqual(model.nq, 19)
         self.assertEqual(model.nv, 18)
+        visuals = model.geom_group == 2
+        self.assertTrue(visuals.any())
+        self.assertTrue(np.all(model.geom_type[visuals] == mujoco.mjtGeom.mjGEOM_MESH))
         self.assertAlmostEqual(model.body_mass.sum(), 16.087)
         # Root includes head + four fixed hip rotors, as merge_fixed_joints in Isaac.
         self.assertAlmostEqual(model.body("base").mass[0], 6.921+.002+4*.089)

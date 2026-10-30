@@ -81,7 +81,7 @@ def load_model(config, root):
                 if geom.get("class") == "visual":
                     g = deepcopy(geom)
                     g.attrib.pop("class")
-                    g.attrib.update(contype="0", conaffinity="0", group="2", density="0")
+                    g.attrib.update(type="mesh", contype="0", conaffinity="0", group="2", density="0")
                     body.append(g)
         for index, collision in enumerate(link.findall("collision")):
             primitive = list(collision.find("geometry"))[0]
