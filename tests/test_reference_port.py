@@ -36,7 +36,8 @@ def sample(cls):
     obj = cls()
     obj.num_envs, obj.num_dof, obj.device, obj.dt = 8, 12, "cpu", .02
     obj.cfg = SimpleNamespace(rewards=SimpleNamespace(
-        **reference["reward_parameters"], tracking_lin_vel_sigma=reference["reward_parameters"]["tracking_sigma"]))
+        **reference["reward_parameters"], tracking_lin_vel_sigma=reference["reward_parameters"]["tracking_sigma"],
+        tracking_ang_vel_sigma=reference["reward_parameters"]["tracking_sigma"]))
     obj.episode_length_buf = torch.tensor([1, 7, 13, 21, 31, 51, 61, 71])
     obj.root_states = torch.zeros(8, 13)
     obj.root_states[:, 2] = .52
@@ -85,6 +86,8 @@ class ReferencePortTests(unittest.TestCase):
             text = text.replace("torch.mean(self.rew_hanstand)", "self.rew_hanstand")
             if name == "_reward_tracking_lin_vel":
                 text = text.replace("self.cfg.rewards.tracking_sigma", "self.cfg.rewards.tracking_lin_vel_sigma")
+            if name == "_reward_tracking_ang_vel":
+                text = text.replace("self.cfg.rewards.tracking_sigma", "self.cfg.rewards.tracking_ang_vel_sigma")
             self.assertEqual(ast.dump(ast.parse(text).body[0]), ast.dump(methods[name]), name)
 
     def test_all_23_rewards_match_upstream_on_same_state(self):
@@ -126,6 +129,33 @@ class ReferencePortTests(unittest.TestCase):
         obj.root_states[-1, 2] = 0.
         obj._reward_base_height()
         self.assertEqual(obj._reward_tracking_lin_vel()[-1].item(), 0.)
+
+    def test_balance_angular_width_preserves_linear_reward_axis_and_height_gate(self):
+        obj = sample(ported)
+        obj.commands.zero_()
+        obj.base_ang_vel.zero_()
+        obj.base_ang_vel[:, 0] = torch.tensor([0., .1, .2, .3, .4, .5, -.2, .1])
+        obj.cfg.rewards.tracking_lin_vel_sigma = .01
+        original_linear = obj._reward_tracking_lin_vel().clone()
+        obj.cfg.rewards.tracking_ang_vel_sigma = .04
+        expected = torch.tensor([1., .778801, .367879, .105399, .018316, .00193045, .367879, .778801])
+        torch.testing.assert_close(obj._reward_tracking_ang_vel(), expected, atol=1e-6, rtol=1e-5)
+        torch.testing.assert_close(obj._reward_tracking_lin_vel(), original_linear)
+        obj.base_ang_vel[:, 1:] = 10.
+        torch.testing.assert_close(obj._reward_tracking_ang_vel(), expected, atol=1e-6, rtol=1e-5)
+        obj.root_states[-1, 2] = 0.
+        obj._reward_base_height()
+        self.assertEqual(obj._reward_tracking_ang_vel()[-1].item(), 0.)
+
+    def test_stage_switch_restores_tracking_widths(self):
+        tree = ast.parse((ROOT / "ry_go2_biped_walk_v20/gait_env_cfg.py").read_text())
+        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "configure_stage")
+        namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": SimpleNamespace}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), "<configure_stage>", "exec"), namespace)
+        cfg = SimpleNamespace(commands=SimpleNamespace(base_velocity=SimpleNamespace(ranges=SimpleNamespace())))
+        for stage, linear, angular in [("balance", .01, .04), ("walk", .25, .25), ("balance", .01, .04)]:
+            namespace["configure_stage"](cfg, stage)
+            self.assertEqual((cfg.tracking_lin_vel_sigma, cfg.tracking_ang_vel_sigma), (linear, angular))
 
     def test_phase_boundary_always_has_one_stance(self):
         obj = sample(ported)

@@ -6,7 +6,7 @@ import torch
 
 
 class ReferenceRewards:
-    """Upstream formulas with documented gates, phase boundary and linear tracking width."""
+    """Upstream formulas with documented gates, phase boundary and independent tracking widths."""
 
     def _get_phase(self):
         cycle_time = self.cfg.rewards.cycle_time
@@ -30,7 +30,7 @@ class ReferenceRewards:
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw) 
         ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 0])
-        return torch.exp(-ang_vel_error/self.cfg.rewards.tracking_sigma)*(self.rew_hanstand>0.70)
+        return torch.exp(-ang_vel_error/self.cfg.rewards.tracking_ang_vel_sigma)*(self.rew_hanstand>0.70)
 
     def _reward_lin_vel_z(self):
         # Penalize z axis base linear velocity

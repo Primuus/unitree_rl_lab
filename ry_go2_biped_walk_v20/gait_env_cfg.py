@@ -92,6 +92,7 @@ def configure_stage(cfg, stage):
     cfg.stage = stage
     cfg.rewards = ReferenceRewardsCfg()
     cfg.tracking_lin_vel_sigma = 0.01 if stage == "balance" else REFERENCE["reward_parameters"]["tracking_sigma"]
+    cfg.tracking_ang_vel_sigma = 0.04 if stage == "balance" else REFERENCE["reward_parameters"]["tracking_sigma"]
     if stage == "balance":
         cfg.rewards.contact = None
         cfg.rewards.feet_clearance = None
@@ -105,6 +106,7 @@ def configure_stage(cfg, stage):
 class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     stage: str = "balance"
     tracking_lin_vel_sigma: float = 0.01
+    tracking_ang_vel_sigma: float = 0.04
     scene: ReferenceSceneCfg = ReferenceSceneCfg(num_envs=4096, env_spacing=3.0)
     actions: ReferenceActionsCfg = ReferenceActionsCfg()
     observations: V20ObservationsCfg = V20ObservationsCfg()
