@@ -67,8 +67,9 @@ class DeploymentTests(unittest.TestCase):
                                        [-float(limit.get("effort")), float(limit.get("effort"))])
 
     def test_exported_policy_backends(self):
-        pt = Policy(ROOT/"models/stage1_balance/exported/policy.pt")
-        onnx = Policy(ROOT/"models/stage1_balance/exported/policy.onnx")
+        policy_path = ROOT/CFG["policy"]
+        pt = Policy(policy_path.with_suffix(".pt"))
+        onnx = Policy(policy_path.with_suffix(".onnx"))
         inputs = np.random.default_rng(1).normal(size=(16, 56)).astype(np.float32)
         for obs in inputs:
             np.testing.assert_allclose(pt(obs), onnx(obs), rtol=1e-4, atol=2e-5)
