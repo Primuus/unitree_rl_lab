@@ -35,7 +35,8 @@ Oracle = namespace["Oracle"]
 def sample(cls):
     obj = cls()
     obj.num_envs, obj.num_dof, obj.device, obj.dt = 8, 12, "cpu", .02
-    obj.cfg = SimpleNamespace(rewards=SimpleNamespace(**reference["reward_parameters"]))
+    obj.cfg = SimpleNamespace(rewards=SimpleNamespace(
+        **reference["reward_parameters"], tracking_lin_vel_sigma=reference["reward_parameters"]["tracking_sigma"]))
     obj.episode_length_buf = torch.tensor([1, 7, 13, 21, 31, 51, 61, 71])
     obj.root_states = torch.zeros(8, 13)
     obj.root_states[:, 2] = .52
@@ -82,6 +83,8 @@ class ReferencePortTests(unittest.TestCase):
             text = text.replace("torch.mean(torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)*5))",
                                 "torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)*5)")
             text = text.replace("torch.mean(self.rew_hanstand)", "self.rew_hanstand")
+            if name == "_reward_tracking_lin_vel":
+                text = text.replace("self.cfg.rewards.tracking_sigma", "self.cfg.rewards.tracking_lin_vel_sigma")
             self.assertEqual(ast.dump(ast.parse(text).body[0]), ast.dump(methods[name]), name)
 
     def test_all_23_rewards_match_upstream_on_same_state(self):
@@ -104,6 +107,21 @@ class ReferencePortTests(unittest.TestCase):
         reward = obj._reward_tracking_lin_vel()
         self.assertEqual(1., reward[0].item())
         self.assertTrue(torch.equal(reward[1:], torch.zeros(7)))
+
+    def test_balance_linear_width_preserves_angular_reward_and_height_gate(self):
+        obj = sample(ported)
+        obj.commands.zero_()
+        obj.base_lin_vel.zero_()
+        obj.base_ang_vel.fill_(0.2)
+        obj.base_lin_vel[:, 2] = torch.tensor([0., .05, .1, .2, -.2, .3, 0., .2])
+        original_angular = obj._reward_tracking_ang_vel().clone()
+        obj.cfg.rewards.tracking_lin_vel_sigma = .04
+        expected = torch.tensor([1., .939413, .778801, .367879, .367879, .105399, 1., .367879])
+        torch.testing.assert_close(obj._reward_tracking_lin_vel(), expected, atol=1e-6, rtol=1e-5)
+        torch.testing.assert_close(obj._reward_tracking_ang_vel(), original_angular)
+        obj.root_states[-1, 2] = 0.
+        obj._reward_base_height()
+        self.assertEqual(obj._reward_tracking_lin_vel()[-1].item(), 0.)
 
     def test_phase_boundary_always_has_one_stance(self):
         obj = sample(ported)

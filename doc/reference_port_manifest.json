@@ -49,7 +49,8 @@
     "Existing 56/155 observation layout retained with 12 joints",
     "Balance stage disables contact and feet_clearance; walk uses all 23 upstream terms",
     "Fixed commands: balance=(0,0,0), walk=(0.2,0,0); plane terrain",
-    "Only material friction/restitution randomization is ported; other upstream domain randomization is not implemented"
+    "Only material friction/restitution randomization is ported; other upstream domain randomization is not implemented",
+    "User-approved balance linear tracking denominator=0.04; angular and walk linear denominators remain 0.25; all reward weights unchanged"
   ],
   "policy_source": {
     "init_noise_std": 1.0,
@@ -143,5 +144,15 @@
     "frame_stack": 1,
     "sym_coef": 1.0
   },
-  "runtime_task_id": "RY-Unitree-Go2-Biped-Gait-v20"
+  "runtime_task_id": "RY-Unitree-Go2-Biped-Gait-v20",
+  "tracking_denominators": {
+    "balance": {
+      "linear": 0.04,
+      "angular": 0.25
+    },
+    "walk": {
+      "linear": 0.25,
+      "angular": 0.25
+    }
+  }
 }

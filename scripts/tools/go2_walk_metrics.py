@@ -8,7 +8,7 @@ class GaitMetrics:
         self.front_ids, _ = sensor.find_bodies(['FL_foot','FR_foot'], preserve_order=True)
         self.active=torch.ones(n,dtype=torch.bool,device=d)
         self.count=torch.zeros(n,device=d)
-        self.sums={k:torch.zeros(n,device=d) for k in ['speed','upright','single_support','flight','height','stance_slip_speed','lateral_speed_abs','vertical_speed_abs','front_contact','speed_error']}
+        self.sums={k:torch.zeros(n,device=d) for k in ['speed','upright','single_support','flight','height','stance_slip_speed','lateral_speed_abs','vertical_speed_abs','front_contact','speed_error','horizontal_speed','yaw_rate_abs']}
         self.start=robot.data.root_pos_w[:,:2].clone(); self.end=self.start.clone()
         yaw=wm.upright_heading(raw); self.forward=torch.stack((torch.cos(yaw),torch.sin(yaw)),-1)
         self.contact=torch.ones(n,2,dtype=torch.bool,device=d)
@@ -55,7 +55,9 @@ class GaitMetrics:
         values=dict(speed=vel[:,0],front_contact=front_contact.float(),speed_error=(vel[:,0]-command).abs(),upright=((upright>0.94)&(height>0.43)).float(),
                     single_support=(self.contact.sum(-1)==1).float(),flight=(self.contact.sum(-1)==0).float(),height=height,
                     stance_slip_speed=(slip*self.contact).sum(-1)/self.contact.sum(-1).clamp(min=1),
-                    lateral_speed_abs=vel[:,1].abs(),vertical_speed_abs=vel[:,2].abs())
+                    lateral_speed_abs=vel[:,1].abs(),vertical_speed_abs=vel[:,2].abs(),
+                    horizontal_speed=robot.data.root_lin_vel_w[:,:2].norm(dim=-1),
+                    yaw_rate_abs=robot.data.root_ang_vel_w[:,2].abs())
         for key,value in values.items(): self.sums[key]+=value*valid
         self.count+=valid.float(); self.end=torch.where(valid[:,None],robot.data.root_pos_w[:,:2],self.end)
         self.active &= ~done

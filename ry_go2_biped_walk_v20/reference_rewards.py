@@ -6,7 +6,7 @@ import torch
 
 
 class ReferenceRewards:
-    """Upstream formulas; only per-environment gates and phase=0.5 are corrected."""
+    """Upstream formulas with documented gates, phase boundary and linear tracking width."""
 
     def _get_phase(self):
         cycle_time = self.cfg.rewards.cycle_time
@@ -25,7 +25,7 @@ class ReferenceRewards:
         x_error = torch.square(self.commands[:, 0] + self.base_lin_vel[:, 2])#站立起来的话，本体的x轴对应世界系的z，本体z轴对应世界系的-x
         y_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1])
         # print(self.rew_hanstand,self.rew_hanstand.shape)
-        return torch.exp(-(y_error+x_error)/self.cfg.rewards.tracking_sigma)*(self.rew_hanstand>0.70)
+        return torch.exp(-(y_error+x_error)/self.cfg.rewards.tracking_lin_vel_sigma)*(self.rew_hanstand>0.70)
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw) 

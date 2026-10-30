@@ -26,7 +26,8 @@ class RewardState(ReferenceRewards):
         self.contact_foot_indices = self.feet_indices[2:]
         self.sensor_ids, _ = self.sensor.find_bodies(self.robot.body_names, preserve_order=True)
         self.penalised_contact_indices, _ = self.robot.find_bodies([".*thigh", ".*calf"])
-        self.cfg = SimpleNamespace(rewards=SimpleNamespace(**REFERENCE["reward_parameters"]))
+        self.cfg = SimpleNamespace(rewards=SimpleNamespace(
+            **REFERENCE["reward_parameters"], tracking_lin_vel_sigma=env.cfg.tracking_lin_vel_sigma))
         self.target_gravity = torch.tensor([-1.0, 0.0, 0.0], device=self.device)
         self.descire_joint_pos = torch.tensor(
             [REFERENCE["desired_joint_angles"][name] for name in JOINT_NAMES], device=self.device)
@@ -128,4 +129,6 @@ def validate_layout(env):
         raise ValueError(f"Reward scales differ from reference/stage: {active}, {expected}")
     return {"action_names": names, "native_joint_names": list(env.scene["robot"].joint_names),
             "observation_dims": dims, "reward_scales": active,
-            "front_foot_ids": s.feet_name_reward_indices, "hind_foot_ids": s.contact_foot_indices}
+            "front_foot_ids": s.feet_name_reward_indices, "hind_foot_ids": s.contact_foot_indices,
+            "tracking_lin_vel_sigma": s.cfg.rewards.tracking_lin_vel_sigma,
+            "tracking_ang_vel_sigma": s.cfg.rewards.tracking_sigma}
