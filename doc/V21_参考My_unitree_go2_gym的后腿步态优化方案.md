@@ -67,12 +67,12 @@
 
 PPO 使用上游隐藏层 `[512, 256, 128]`、ELU、初始标准差 `1.0`、学习率 `1e-3`、adaptive schedule、entropy coefficient `0.01`、每环境 rollout `24` 步。其余 PPO 参数来自同一上游配置。使用当前 RSL-RL 的镜像损失接口，系数 `1.0`；不同时启用镜像数据增强。
 
-首版训练支持两个阶段：
+当前保留两个阶段；按用户要求停止混合采样改动，Walk 固定速度调整为 `0.2 m/s`。奖励公式、权重及 `tracking_sigma=0.25` 保持原值。
 
 | 阶段 | 命令 | 奖励差异 |
 | --- | --- | --- |
 | `balance` | 零速度 | 关闭 `contact`、`feet_clearance`，其余 21 项沿用上游 |
-| `walk` | 前向 `0.12 m/s`、零横向和转向 | 完整的 23 项上游奖励 |
+| `walk` | 前向 `0.2 m/s`、零横向和转向 | 完整的 23 项上游奖励 |
 
 阶段划分来自 V21 方案。初始状态位于直立附近；首版不实现四足起立课程。地形为平地，材质摩擦与恢复系数随机化采用上游范围；上游其他质量、质心、增益、延迟和推扰随机化尚未移植。这是奖励和控制的移植，不宣称复现上游全部训练条件。
 
@@ -105,7 +105,7 @@ cd /workspace/ry_unitree_rl_lab
 ```bash
 ./ry_python.sh scripts/eval_v20.py --stage walk \
   --checkpoint logs/rsl_rl/ry_unitree_go2_handstand/<训练目录>/model_<迭代>.pt \
-  --num_envs 16 --steps 1000 --speed 0.12 \
+  --num_envs 16 --steps 1000 --speed 0.2 \
   --out logs/evaluation/walk --headless --device cuda:0
 ```
 

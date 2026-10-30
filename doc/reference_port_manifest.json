@@ -48,7 +48,7 @@
     "Upright initialization from upstream desired angles, rather than quadruped reset",
     "Existing 56/155 observation layout retained with 12 joints",
     "Balance stage disables contact and feet_clearance; walk uses all 23 upstream terms",
-    "Fixed stage commands and plane terrain",
+    "Fixed commands: balance=(0,0,0), walk=(0.2,0,0); plane terrain",
     "Only material friction/restitution randomization is ported; other upstream domain randomization is not implemented"
   ],
   "policy_source": {
