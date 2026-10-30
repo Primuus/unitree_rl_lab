@@ -115,10 +115,14 @@ class ReferencePortTests(unittest.TestCase):
         obj.base_ang_vel.fill_(0.2)
         obj.base_lin_vel[:, 2] = torch.tensor([0., .05, .1, .2, -.2, .3, 0., .2])
         original_angular = obj._reward_tracking_ang_vel().clone()
-        obj.cfg.rewards.tracking_lin_vel_sigma = .04
-        expected = torch.tensor([1., .939413, .778801, .367879, .367879, .105399, 1., .367879])
-        torch.testing.assert_close(obj._reward_tracking_lin_vel(), expected, atol=1e-6, rtol=1e-5)
-        torch.testing.assert_close(obj._reward_tracking_ang_vel(), original_angular)
+        for width, values in [
+            (.04, [1., .939413, .778801, .367879, .367879, .105399, 1., .367879]),
+            (.01, [1., .778801, .367879, .018316, .018316, .00012341, 1., .018316]),
+        ]:
+            with self.subTest(width=width):
+                obj.cfg.rewards.tracking_lin_vel_sigma = width
+                torch.testing.assert_close(obj._reward_tracking_lin_vel(), torch.tensor(values), atol=1e-6, rtol=1e-5)
+                torch.testing.assert_close(obj._reward_tracking_ang_vel(), original_angular)
         obj.root_states[-1, 2] = 0.
         obj._reward_base_height()
         self.assertEqual(obj._reward_tracking_lin_vel()[-1].item(), 0.)
