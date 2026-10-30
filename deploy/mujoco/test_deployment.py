@@ -74,6 +74,8 @@ class DeploymentTests(unittest.TestCase):
     def test_first_step_velocity_limit_and_position_increment(self):
         sim = Simulation(CFG, ROOT/CFG["policy"])
         before = sim.data.qpos[sim.qids].copy()
+        # Exercise projection independently of the current policy and timestep.
+        sim.data.qvel[sim.vids] = 2 * sim.velocity_limits
         sim.step()
         self.assertGreater(sim.velocity_limit_applications, 0)
         self.assertTrue(np.all(np.abs(sim.data.qvel[sim.vids]) <= sim.velocity_limits))

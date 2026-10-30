@@ -37,13 +37,21 @@
     "validation": "deploy/mujoco/outputs/balance_continue1998_velocity_limits_20s.json"
   },
   "latest_mujoco_validation": {
-    "output": "deploy/mujoco/outputs/balance_sigma001_2996_20s.json",
+    "output": "deploy/mujoco/outputs/balance_sigma001_2996_1ms_20s.json",
     "duration_s": 20,
     "upright_fraction": 1.0,
     "front_contact_fraction": 0.0,
-    "mean_abs_forward_speed_mps": 0.11445148872124264,
+    "mean_abs_forward_speed_mps": 0.13425602744333445,
     "finite": true,
     "joint_velocity_limit_mode": "project_velocity_and_position",
     "scope": "One fixed initial state; existing numerical velocity-limit approximation retained"
+  },
+  "mujoco_integration": {
+    "physics_dt": 0.001,
+    "decimation": 20,
+    "policy_dt": 0.02,
+    "training_physics_dt": 0.005,
+    "reason": "5 ms produced 100 Hz front-leg oscillations; 2.5 ms and 1 ms reduced these while preserving the 20 ms policy period",
+    "report": "doc/MuJoCo\u6296\u52a8\u8bca\u65ad.md"
   }
 }

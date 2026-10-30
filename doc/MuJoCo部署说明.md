@@ -17,7 +17,7 @@ cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 conda activate RL
 python deploy.py
 python deploy.py --policy models/stage1_balance_sigma001_2996/exported/policy.onnx
-python deploy.py --headless --duration 20 --output outputs/balance_sigma001_2996_20s.json
+python deploy.py --headless --duration 20 --output outputs/balance_sigma001_2996_1ms_20s.json
 ```
 
 `--duration 0` 表示持续运行；`--headless` 不限制到实时速度。输出 JSON 包含统计和每个策略步的轨迹，重置后重新统计。`--config` 可指定部署 JSON 配置；相对策略路径相对于部署代码目录。
@@ -52,7 +52,7 @@ python deploy.py --headless --duration 20 --output outputs/balance_sigma001_2996
 
 观测关节顺序为 hip 四关节、thigh 四关节、calf 四关节，每组 FL/FR/RL/RR；动作顺序为 FL/FR/RL/RR，每腿 hip/thigh/calf。名称映射与训练 `provenance.json` 一致。
 
-策略周期 20 ms，物理步长 5 ms，decimation=4。PD 每个物理步重算，Kp=40、Kd=1；动作裁剪 ±100，目标角为 `action_offset + 0.25 × action`。力矩限幅取训练 URDF：hip/thigh ±23.7 Nm、calf ±45.43 Nm。
+策略周期 20 ms，MuJoCo 物理步长 1 ms，decimation=20；训练环境物理步长仍为 5 ms。缩小部署积分步长用于减轻高频数值抖动，见 [抖动诊断](MuJoCo抖动诊断.md)。PD 每个物理步重算，Kp=40、Kd=1；动作裁剪 ±100，目标角为 `action_offset + 0.25 × action`。力矩限幅取训练 URDF：hip/thigh ±23.7 Nm、calf ±45.43 Nm。
 
 初始高度 0.52 m，四元数 wxyz 为 `[√0.5,0,-√0.5,0]`。初始关节角取训练 desired angles，动作零点取 default angles，两者分别配置；零动作不等于保持初始直立姿态。
 
@@ -75,7 +75,7 @@ conda run -n RL python -B -m unittest test_deployment -v
 
 五项检查覆盖观测坐标和关节排列、接触力方向与重量、URDF 质量及限位、首步关节限速与位移一致性、PT/ONNX 推理一致性。模型文件是正式部署输入，不依赖测试产物。
 
-最新 model_2996 已下载 PT、ONNX 和配套配置，共 1,613,197 字节，六个文件 SHA256 均与服务器一致。部署控制配置与旧策略相同。固定初始状态的 20 秒 MuJoCo 验证中，直立判定比例 100%，前脚触地比例 0，平均绝对前向速度 0.11445 m/s，数值有限；仍有漂移。记录位于 `outputs/balance_sigma001_2996_20s.json`。本结果使用下述既有限速数值近似，不代表两引擎物理等价，也不是多初始状态的稳健性验收。
+最新 model_2996 已下载 PT、ONNX 和配套配置，共 1,613,197 字节，六个文件 SHA256 均与服务器一致。部署控制配置与旧策略相同。固定初始状态的 20 秒 MuJoCo 验证中，直立判定比例 100%，前脚触地比例 0，平均绝对前向速度 0.13426 m/s，数值有限；仍有漂移。当前默认物理步长为 1 ms，记录位于 `outputs/balance_sigma001_2996_1ms_20s.json`；此前 5 ms 的记录保留。本结果使用下述既有限速数值近似，不代表两引擎物理等价，也不是多初始状态的稳健性验收。
 
 历史 model_1998：补齐限速前，该策略在 MuJoCo 的 20 秒无界面运行中数值有限，但约 2 秒内倒下，姿态与高度同时达标比例为 3.8%，前脚触地比例为 17.6%。同一 checkpoint 在 Isaac Lab 的 4 环境、20 秒独立评估中平均高度为 0.505 m，姿态与高度同时达标比例为 95.3%，速度误差约 0.216 m/s，无摔倒，但平衡验收仍未通过。MuJoCo 中的倾倒比 Isaac 明显，说明跨仿真的表现差异仍未解决；部署链路可运行不代表 sim2sim 成功。
 
