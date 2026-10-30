@@ -1,4 +1,4 @@
-"""Go2 hind-leg walking with world-axis progress and explicit alternating gait."""
+"""Current full-Go2 handstand implementation; task ID remains stable."""
 import gymnasium as gym
 
 gym.register(

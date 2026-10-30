@@ -20,6 +20,6 @@ venv/
 .env
 .env.*
 
-# Keep only the initializer required by the training entry point
+# Historical initializer already tracked; current 12-action training starts from scratch
 checkpoints/*
 !checkpoints/warm_start_v11_model_40.pt

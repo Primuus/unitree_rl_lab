@@ -1,59 +1,46 @@
-"""V20 combines frame alignment and gait target gradients based on v3 evidence."""
+"""Current task: full Go2 with the reference handstand reward set."""
+import isaaclab.terrains as terrain_gen
 from isaaclab.envs import mdp
 from isaaclab.managers import ObservationGroupCfg as ObsGroup, ObservationTermCfg as ObsTerm
-from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-from isaaclab.managers import RewardTermCfg as RewTerm
-from isaaclab.managers import CurriculumTermCfg as CurrTerm
+from isaaclab.managers import RewardTermCfg as RewTerm, EventTermCfg as EventTerm
+from isaaclab.managers import SceneEntityCfg, TerminationTermCfg as DoneTerm
 from isaaclab.utils import configclass
-from isaaclab_rl.rsl_rl import RslRlSymmetryCfg
-from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk_v2.gait_env_cfg import (
-    GaitRewardsCfg,
-    Go2BipedGaitEnvCfg,
-    Go2BipedGaitPlayEnvCfg,
-    Go2BipedGaitRunnerCfg,
-    REAR_BODIES,
-    REAR_CONTACTS,
-    ROBOT_WEIGHT,
-    SCANNER,
-)
-from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk.walk_env_cfg import GAIT_PERIOD, WalkObservationsCfg
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+from isaaclab_rl.rsl_rl import (
+    RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlSymmetryCfg)
+from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk.walk_env_cfg import (
+    Go2BipedWalkEnvCfg, WalkSceneCfg, SCANNER, REAR_BODIES, REAR_CONTACTS)
+from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk import walk_mdp as wm
 from . import gait_mdp as gm
-from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk_v2.gait_env_cfg import GaitCurriculumCfg
-from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk_v3.gait_mdp import command_curriculum
+from .reference_config import REFERENCE
+from .robot_cfg import ROBOT_CFG, ROBOT_WEIGHT, JOINT_NAMES
+
+GAIT_PERIOD = REFERENCE["reward_parameters"]["cycle_time"]
 
 
 @configclass
-class V20RewardsCfg(GaitRewardsCfg):
-    track_linear = RewTerm(func=gm.world_velocity_tracking, weight=2.5, params={"terrain_sensor_cfg": SCANNER})
-    track_yaw = RewTerm(func=gm.strict_yaw_tracking, weight=-0.5, params={"terrain_sensor_cfg": SCANNER})
-    progress = RewTerm(func=gm.world_forward_progress, weight=2.0, params={"terrain_sensor_cfg": SCANNER})
-    phase_load = RewTerm(func=gm.phase_load, weight=-2.5, params={"sensor_cfg": REAR_CONTACTS, "asset_cfg": REAR_BODIES, "terrain_sensor_cfg": SCANNER, "robot_weight": ROBOT_WEIGHT, "period": 1.0})
-    swing_clearance = RewTerm(func=gm.swing_clearance, weight=5.0, params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS, "terrain_sensor_cfg": SCANNER, "robot_weight": ROBOT_WEIGHT, "period": 1.0, "clearance": 0.06, "std": 0.04})
-    swing_forward_position = RewTerm(func=gm.swing_forward_position, weight=3.0,
-        params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS, "terrain_sensor_cfg": SCANNER,
-                "robot_weight": ROBOT_WEIGHT, "period": GAIT_PERIOD, "stride": 0.06})
-    swing_forward_speed = RewTerm(func=gm.swing_forward_speed, weight=0.4,
-        params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS, "terrain_sensor_cfg": SCANNER,
-                "robot_weight": ROBOT_WEIGHT, "period": GAIT_PERIOD})
-    heading_alignment = RewTerm(func=gm.heading_alignment, weight=1.5, params={"terrain_sensor_cfg": SCANNER})
-    qualified_touchdown = RewTerm(func=gm.qualified_touchdown_reward, weight=12.0,
-        params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS,
-                "terrain_sensor_cfg": SCANNER, "period": GAIT_PERIOD,
-                "robot_weight": ROBOT_WEIGHT, "min_air": 0.06,
-                "min_lift": 0.02, "min_support": 0.25})
+class ReferenceSceneCfg(WalkSceneCfg):
+    robot = ROBOT_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
+
+@configclass
+class ReferenceActionsCfg:
+    joint_pos = mdp.JointPositionActionCfg(
+        asset_name="robot", joint_names=JOINT_NAMES, preserve_order=True,
+        scale=REFERENCE["control"]["action_scale"], use_default_offset=False,
+        offset=REFERENCE["default_joint_angles"])
 
 
 @configclass
 class V20ObservationsCfg:
     @configclass
     class PolicyCfg(ObsGroup):
-        linear_velocity = ObsTerm(func=gm.wm.heading_lin_vel, noise=Unoise(n_min=-0.05, n_max=0.05))
+        linear_velocity = ObsTerm(func=wm.heading_lin_vel, noise=Unoise(n_min=-0.05, n_max=0.05))
         angular_velocity = ObsTerm(func=mdp.base_ang_vel, scale=0.25, noise=Unoise(n_min=-0.1, n_max=0.1))
         projected_gravity = ObsTerm(func=mdp.projected_gravity, noise=Unoise(n_min=-0.02, n_max=0.02))
         command = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        gait_phase = ObsTerm(func=gm.wm.gait_clock, params={"period": GAIT_PERIOD})
-        joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
+        gait_phase = ObsTerm(func=wm.gait_clock, params={"period": GAIT_PERIOD})
+        joint_pos = ObsTerm(func=gm.joint_position_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, scale=0.05, noise=Unoise(n_min=-0.5, n_max=0.5))
         last_action = ObsTerm(func=mdp.last_action)
         heading = ObsTerm(func=gm.heading_features)
@@ -65,12 +52,12 @@ class V20ObservationsCfg:
 
     @configclass
     class CriticCfg(ObsGroup):
-        linear_velocity = ObsTerm(func=gm.wm.heading_lin_vel)
+        linear_velocity = ObsTerm(func=wm.heading_lin_vel)
         angular_velocity = ObsTerm(func=mdp.base_ang_vel, scale=0.25)
         projected_gravity = ObsTerm(func=mdp.projected_gravity)
         command = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        gait_phase = ObsTerm(func=gm.wm.gait_clock, params={"period": GAIT_PERIOD})
-        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
+        gait_phase = ObsTerm(func=wm.gait_clock, params={"period": GAIT_PERIOD})
+        joint_pos = ObsTerm(func=gm.joint_position_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, scale=0.05)
         last_action = ObsTerm(func=mdp.last_action)
         height_scan = ObsTerm(func=mdp.height_scan, params={"sensor_cfg": SCANNER}, clip=(-1.0, 1.0))
@@ -85,46 +72,80 @@ class V20ObservationsCfg:
     critic: CriticCfg = CriticCfg()
 
 
-@configclass
-class V20BalanceCurriculumCfg(GaitCurriculumCfg):
-    commands = CurrTerm(func=command_curriculum, params={"balance_steps": 3000, "ramp_steps": 10000})
+# Every nonzero upstream scale is registered; zero/absent terms stay disabled.
+ReferenceRewardsCfg = configclass(type("ReferenceRewardsCfg", (), {
+    name: RewTerm(func=gm.reference_reward, weight=weight, params={"name": name})
+    for name, weight in REFERENCE["reward_scales"].items() if weight != 0
+}))
 
 
 @configclass
-class Go2BipedGaitV20EnvCfg(Go2BipedGaitEnvCfg):
+class ReferenceTerminationsCfg:
+    time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    body_contact = DoneTerm(func=mdp.illegal_contact, params={
+        "sensor_cfg": SceneEntityCfg("contact_forces", body_names="base"), "threshold": 1.0})
+
+
+def configure_stage(cfg, stage):
+    if stage not in ("balance", "walk"):
+        raise ValueError(f"Unknown stage: {stage}")
+    cfg.stage = stage
+    cfg.rewards = ReferenceRewardsCfg()
+    if stage == "balance":
+        cfg.rewards.contact = None
+        cfg.rewards.feet_clearance = None
+    cfg.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0) if stage == "balance" else (0.12, 0.12)
+    cfg.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+    cfg.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
+    cfg.commands.base_velocity.rel_standing_envs = 1.0 if stage == "balance" else 0.0
+
+
+@configclass
+class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
+    stage: str = "balance"
+    scene: ReferenceSceneCfg = ReferenceSceneCfg(num_envs=2048, env_spacing=3.0)
+    actions: ReferenceActionsCfg = ReferenceActionsCfg()
     observations: V20ObservationsCfg = V20ObservationsCfg()
-    curriculum: V20BalanceCurriculumCfg = V20BalanceCurriculumCfg()
-    rewards: V20RewardsCfg = V20RewardsCfg()
+    rewards: ReferenceRewardsCfg = ReferenceRewardsCfg()
+    terminations: ReferenceTerminationsCfg = ReferenceTerminationsCfg()
+    curriculum = None
 
     def __post_init__(self):
         super().__post_init__()
-        # The v7 actor already balances while moving; expose the gait objective immediately.
-        self.commands.base_velocity.ranges.lin_vel_x = (0.12, 0.12)
-        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
-        self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
-        self.commands.base_velocity.rel_standing_envs = 0.0
-        self.curriculum.commands = None
-        self.actions.joint_pos.scale = 0.4
+        self.scene.terrain.terrain_generator = terrain_gen.TerrainGeneratorCfg(
+            size=(8.0, 8.0), border_width=5.0, num_rows=1, num_cols=1,
+            curriculum=False, use_cache=False,
+            sub_terrains={"flat": terrain_gen.MeshPlaneTerrainCfg(proportion=1.0)})
+        self.scene.terrain.max_init_terrain_level = 0
+        self.events.friction.params.update(
+            static_friction_range=(0.2, 1.2), dynamic_friction_range=(0.2, 1.2),
+            restitution_range=(0.0, 0.3))
+        self.events.reference_history = EventTerm(func=gm.reset_reference_history, mode="reset")
+        self.commands.base_velocity.resampling_time_range = (10.0, 10.0)
+        configure_stage(self, self.stage)
 
 
 @configclass
-class Go2BipedGaitV20PlayEnvCfg(Go2BipedGaitPlayEnvCfg):
-    observations: V20ObservationsCfg = V20ObservationsCfg()
+class Go2BipedGaitV20PlayEnvCfg(Go2BipedGaitV20EnvCfg):
     def __post_init__(self):
         super().__post_init__()
-        self.actions.joint_pos.scale = 0.4
+        self.scene.num_envs = 1
+        self.events.friction = None
+        self.observations.policy.enable_corruption = False
 
 
 @configclass
-class Go2BipedGaitV20RunnerCfg(Go2BipedGaitRunnerCfg):
-    experiment_name = "ry_unitree_go2_biped_walk_v20"
-    save_interval = 20
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.policy.init_noise_std = 0.08
-        self.algorithm.learning_rate = 3e-5
-        self.algorithm.schedule = "fixed"
-        self.algorithm.symmetry_cfg = RslRlSymmetryCfg(
-            use_data_augmentation=True, use_mirror_loss=False, mirror_loss_coeff=0.0,
-            data_augmentation_func="ry_go2_biped_walk_v20.symmetry:mirror_data")
+class Go2BipedGaitV20RunnerCfg(RslRlOnPolicyRunnerCfg):
+    experiment_name = "ry_unitree_go2_handstand"
+    empirical_normalization = False
+    num_steps_per_env = REFERENCE["ppo_runner"]["num_steps_per_env"]
+    max_iterations = REFERENCE["ppo_runner"]["max_iterations"]
+    save_interval = REFERENCE["ppo_runner"]["save_interval"]
+    clip_actions = 100.0
+    policy = RslRlPpoActorCriticCfg(**REFERENCE["ppo_policy"])
+    algorithm = RslRlPpoAlgorithmCfg(**{
+        key: value for key, value in REFERENCE["ppo_algorithm"].items()
+        if key not in ("sym_loss", "obs_permutation", "act_permutation", "frame_stack", "sym_coef")},
+        symmetry_cfg=RslRlSymmetryCfg(
+            use_data_augmentation=False, use_mirror_loss=True, mirror_loss_coeff=1.0,
+            data_augmentation_func="ry_go2_biped_walk_v20.symmetry:mirror_data"))

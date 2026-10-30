@@ -1,0 +1,3 @@
+# Preserve the copied upstream source and reward docstrings for provenance tests.
+third_party/My_unitree_go2_gym/* -whitespace
+ry_go2_biped_walk_v20/reference_rewards.py -whitespace

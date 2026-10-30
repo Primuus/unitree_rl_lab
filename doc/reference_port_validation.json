@@ -1,0 +1,267 @@
+{
+  "date": "2026-10-30",
+  "unit_tests": {
+    "passed": 6,
+    "suite": "tests/test_reference_port.py"
+  },
+  "smoke": {
+    "num_envs": 4,
+    "steps": 12,
+    "finite": true,
+    "layout": {
+      "action_names": [
+        "FL_hip_joint",
+        "FL_thigh_joint",
+        "FL_calf_joint",
+        "FR_hip_joint",
+        "FR_thigh_joint",
+        "FR_calf_joint",
+        "RL_hip_joint",
+        "RL_thigh_joint",
+        "RL_calf_joint",
+        "RR_hip_joint",
+        "RR_thigh_joint",
+        "RR_calf_joint"
+      ],
+      "native_joint_names": [
+        "FL_hip_joint",
+        "FR_hip_joint",
+        "RL_hip_joint",
+        "RR_hip_joint",
+        "FL_thigh_joint",
+        "FR_thigh_joint",
+        "RL_thigh_joint",
+        "RR_thigh_joint",
+        "FL_calf_joint",
+        "FR_calf_joint",
+        "RL_calf_joint",
+        "RR_calf_joint"
+      ],
+      "observation_dims": {
+        "policy": 56,
+        "critic": 155
+      },
+      "reward_scales": {
+        "tracking_lin_vel": 2.5,
+        "tracking_ang_vel": 2.5,
+        "lin_vel_z": 0.2,
+        "ang_vel_xy": 0.2,
+        "handstand_orientation": -1,
+        "torques": -0.0002,
+        "dof_acc": -2.5e-7,
+        "base_height": 1.5,
+        "handstand_feet_on_air": 0.4,
+        "collision": -2,
+        "action_rate": -0.05,
+        "default_pos": -0.1,
+        "default_hip_pos": -0.1,
+        "feet_clearance": 0.4,
+        "ang_xz": -0.5,
+        "contact": 0.3,
+        "symmetric_joints": -0.1,
+        "orientation_symmetry": -0.5,
+        "feet_height_symmetry": -0.2,
+        "handstand_feet_height_exp": 5,
+        "default_pos_reward": 0.5,
+        "dof_pos_limits": -2,
+        "alive": 1
+      },
+      "front_foot_ids": [
+        15,
+        16
+      ],
+      "hind_foot_ids": [
+        17,
+        18
+      ]
+    }
+  },
+  "balance_training": {
+    "num_envs": 64,
+    "iterations": 3,
+    "transitions": 4608,
+    "checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-30_10-16-47_balance_reference_port_check/model_2.pt"
+  },
+  "walk_resume": {
+    "num_envs": 64,
+    "iterations": 1,
+    "checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-30_10-19-08_walk_reference_port_resume_check/model_2.pt"
+  },
+  "exports": {
+    "balance": {
+      "checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-30_10-16-47_balance_reference_port_check/model_2.pt",
+      "jit_max_abs_error": 0,
+      "onnx_max_abs_error": 1.043081283569336e-7,
+      "optimizer_has_state": true,
+      "onnx_backend": "onnx.reference.ReferenceEvaluator",
+      "samples": 5
+    },
+    "walk": {
+      "checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-30_10-19-08_walk_reference_port_resume_check/model_2.pt",
+      "jit_max_abs_error": 0,
+      "onnx_max_abs_error": 1.0058283805847168e-7,
+      "optimizer_has_state": true,
+      "onnx_backend": "onnx.reference.ReferenceEvaluator",
+      "samples": 5
+    }
+  },
+  "trained_evaluation": {
+    "speed": 0.023570241406559944,
+    "upright": 0.006000000052154064,
+    "single_support": 0.0005000000237487257,
+    "flight": 0.05350000038743019,
+    "height": 0.30748504400253296,
+    "stance_slip_speed": 0.008598193526268005,
+    "lateral_speed_abs": 0.005929793231189251,
+    "vertical_speed_abs": 0.026949875056743622,
+    "front_contact": 0.9227499961853027,
+    "speed_error": 0.13275961577892303,
+    "falls": 0,
+    "resets_total": 0,
+    "termination_counts": {
+      "time_out": 0,
+      "body_contact": 0
+    },
+    "touchdowns_mean": [
+      0,
+      0
+    ],
+    "raw_touchdowns_mean": [
+      1,
+      1
+    ],
+    "qualified_touchdowns_per_env": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ],
+    "valid_seconds_per_env": [
+      20,
+      20,
+      20,
+      20
+    ],
+    "net_forward_displacement_m": [
+      0.43969711661338806,
+      0.43977588415145874,
+      0.43762093782424927,
+      0.4350432753562927
+    ],
+    "alternation_fraction_per_env": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "max_relative_foot_height": [
+      0.0145382359623909,
+      0.000029847025871276855
+    ],
+    "walking_acceptance_per_env": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "walking_acceptance_passed": false,
+    "balance_acceptance_passed": false,
+    "task": "RY-Unitree-Go2-Biped-Gait-v20",
+    "stage": "walk",
+    "checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-30_10-19-08_walk_reference_port_resume_check/model_2.pt",
+    "checkpoint_sha256": "29ed5571430e00de1627be82626d22dc3a1a0669e13d29c3a203ede5ce76c16d",
+    "mode": "trained_policy",
+    "finite": true,
+    "steps": 1000,
+    "seconds_per_env": 20,
+    "num_envs": 4,
+    "action_dim": 12,
+    "hind_feet": [
+      "RL_foot",
+      "RR_foot"
+    ],
+    "layout": {
+      "action_names": [
+        "FL_hip_joint",
+        "FL_thigh_joint",
+        "FL_calf_joint",
+        "FR_hip_joint",
+        "FR_thigh_joint",
+        "FR_calf_joint",
+        "RL_hip_joint",
+        "RL_thigh_joint",
+        "RL_calf_joint",
+        "RR_hip_joint",
+        "RR_thigh_joint",
+        "RR_calf_joint"
+      ],
+      "native_joint_names": [
+        "FL_hip_joint",
+        "FR_hip_joint",
+        "RL_hip_joint",
+        "RR_hip_joint",
+        "FL_thigh_joint",
+        "FR_thigh_joint",
+        "RL_thigh_joint",
+        "RR_thigh_joint",
+        "FL_calf_joint",
+        "FR_calf_joint",
+        "RL_calf_joint",
+        "RR_calf_joint"
+      ],
+      "observation_dims": {
+        "policy": 56,
+        "critic": 155
+      },
+      "reward_scales": {
+        "tracking_lin_vel": 2.5,
+        "tracking_ang_vel": 2.5,
+        "lin_vel_z": 0.2,
+        "ang_vel_xy": 0.2,
+        "handstand_orientation": -1,
+        "torques": -0.0002,
+        "dof_acc": -2.5e-7,
+        "base_height": 1.5,
+        "handstand_feet_on_air": 0.4,
+        "collision": -2,
+        "action_rate": -0.05,
+        "default_pos": -0.1,
+        "default_hip_pos": -0.1,
+        "feet_clearance": 0.4,
+        "ang_xz": -0.5,
+        "contact": 0.3,
+        "symmetric_joints": -0.1,
+        "orientation_symmetry": -0.5,
+        "feet_height_symmetry": -0.2,
+        "handstand_feet_height_exp": 5,
+        "default_pos_reward": 0.5,
+        "dof_pos_limits": -2,
+        "alive": 1
+      },
+      "front_foot_ids": [
+        15,
+        16
+      ],
+      "hind_foot_ids": [
+        17,
+        18
+      ]
+    }
+  },
+  "limitations": [
+    "Short execution checks only; the evaluated policy has not learned stable upright gait.",
+    "Falls counts follow base-contact termination and do not alone indicate upright stability."
+  ]
+}

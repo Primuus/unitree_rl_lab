@@ -1,184 +1,131 @@
-"""V7 gait terms with contact and foot-height feedback for closed-loop stepping."""
-import math
+"""Isaac Lab tensor adapter for the copied upstream reward methods."""
+from types import SimpleNamespace
+
 import torch
+from isaaclab.utils.math import euler_xyz_from_quat
 from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk import walk_mdp as wm
+from .reference_config import REFERENCE
+from .reference_rewards import ReferenceRewards
+from .robot_cfg import JOINT_NAMES, FOOT_NAMES
 
 
-def world_velocity_tracking(env, terrain_sensor_cfg, command_name="base_velocity"):
-    command = env.command_manager.get_command(command_name)[:, 0]
-    velocity = env.scene["robot"].data.root_lin_vel_w[:, 0]
-    std = (0.5 * command.abs()).clamp(min=0.05, max=0.10)
-    return torch.exp(-((command - velocity) / std).square()) * wm.posture_gate(env, terrain_sensor_cfg)
+class RewardState(ReferenceRewards):
+    def __init__(self, env):
+        self.env = env
+        self.robot = env.scene["robot"]
+        self.sensor = env.scene["contact_forces"]
+        self.num_envs, self.device, self.num_dof = env.num_envs, env.device, 12
+        self.dt = env.step_dt
+        self.joint_ids, names = self.robot.find_joints(JOINT_NAMES, preserve_order=True)
+        if names != JOINT_NAMES:
+            raise ValueError(f"Reference joint order mismatch: {names}")
+        self.feet_indices, names = self.robot.find_bodies(FOOT_NAMES, preserve_order=True)
+        if names != FOOT_NAMES:
+            raise ValueError(f"Reference foot order mismatch: {names}")
+        self.feet_name_reward_indices = self.feet_indices[:2]
+        self.contact_foot_indices = self.feet_indices[2:]
+        self.sensor_ids, _ = self.sensor.find_bodies(self.robot.body_names, preserve_order=True)
+        self.penalised_contact_indices, _ = self.robot.find_bodies([".*thigh", ".*calf"])
+        self.cfg = SimpleNamespace(rewards=SimpleNamespace(**REFERENCE["reward_parameters"]))
+        self.target_gravity = torch.tensor([-1.0, 0.0, 0.0], device=self.device)
+        self.descire_joint_pos = torch.tensor(
+            [REFERENCE["desired_joint_angles"][name] for name in JOINT_NAMES], device=self.device)
+        self.soft_dof_pos_limits = self.robot.data.soft_joint_pos_limits[0, self.joint_ids]
+        self.measured_heights = torch.zeros(self.num_envs, 1, device=self.device)
+        self.previous_velocity = torch.zeros(self.num_envs, 12, device=self.device)
+        self.tick = -1
+
+    def refresh(self):
+        env, data = self.env, self.robot.data
+        if self.tick == env.common_step_counter:
+            return
+        self.tick = env.common_step_counter
+        self.episode_length_buf = env.episode_length_buf
+        self.root_states = data.root_state_w
+        self.base_lin_vel = data.root_lin_vel_b
+        self.base_ang_vel = data.root_ang_vel_b
+        self.projected_gravity = data.projected_gravity_b
+        self.base_euler_xyz = torch.stack(euler_xyz_from_quat(data.root_quat_w), dim=-1)
+        self.base_euler_xyz = torch.where(self.base_euler_xyz > torch.pi,
+                                        self.base_euler_xyz - 2 * torch.pi, self.base_euler_xyz)
+        self.dof_pos = data.joint_pos[:, self.joint_ids]
+        self.dof_vel = data.joint_vel[:, self.joint_ids]
+        # Upstream uses the previous control-step velocity, not physics-step joint_acc.
+        self.last_dof_vel = self.previous_velocity.clone()
+        self.previous_velocity.copy_(self.dof_vel)
+        self.torques = data.applied_torque[:, self.joint_ids]
+        self.actions = env.action_manager.action
+        self.last_actions = env.action_manager.prev_action
+        self.commands = env.command_manager.get_command("base_velocity")
+        self.rigid_state = data.body_pos_w
+        self.feet_pos = self.rigid_state[:, self.feet_name_reward_indices]
+        self.contact_forces = self.sensor.data.net_forces_w[:, self.sensor_ids]
+        # Compute before all terms, avoiding the upstream reward-order/one-step lag.
+        self._reward_base_height()
 
 
-def world_forward_progress(env, terrain_sensor_cfg, command_name="base_velocity"):
-    command = env.command_manager.get_command(command_name)[:, 0]
-    velocity = env.scene["robot"].data.root_lin_vel_w[:, 0]
-    return (velocity / command.abs().clamp(min=0.04)).clamp(-1.0, 1.0) * (command.abs() > 0.04) * wm.posture_gate(env, terrain_sensor_cfg)
+def state(env):
+    if not hasattr(env, "_reference_reward_state"):
+        env._reference_reward_state = RewardState(env)
+    env._reference_reward_state.refresh()
+    return env._reference_reward_state
 
 
-def strict_yaw_tracking(env, terrain_sensor_cfg, command_name="base_velocity"):
-    yaw_rate = env.scene["robot"].data.root_ang_vel_w[:, 2]
-    command = env.command_manager.get_command(command_name)[:, 2]
-    error = command - yaw_rate
-    return error.square().clamp(max=4.0) * wm.posture_gate(env, terrain_sensor_cfg)
+def reference_reward(env, name):
+    value = getattr(state(env), "_reward_" + name)()
+    return torch.as_tensor(value, device=env.device).expand(env.num_envs)
 
 
-def gait_targets(env, period=1.0, stance_ratio=0.5):
-    phase = wm.phases(env, period)
-    swing_phase = ((phase - stance_ratio) / (1.0 - stance_ratio)).clamp(0.0, 1.0)
-    swing = phase >= stance_ratio
-    arc = torch.sin(math.pi * swing_phase).clamp(min=0.0) * swing
-    support = 1.0 - torch.sqrt(arc)
-    target = support / support.sum(-1, keepdim=True).clamp(min=1e-6)
-    return swing, arc, target
+def reset_reference_history(env, env_ids):
+    if hasattr(env, "_reference_reward_state"):
+        s = env._reference_reward_state
+        s.previous_velocity[env_ids] = 0.0
+        s.tick = -1
 
 
-def phase_load(env, sensor_cfg, asset_cfg, terrain_sensor_cfg, robot_weight, period=1.0, command_name="base_velocity"):
-    _, _, target = gait_targets(env, period)
-    forces = env.scene.sensors[sensor_cfg.name].data.net_forces_w[:, sensor_cfg.body_ids, 2]
-    actual = (forces.clamp(min=0.0) / robot_weight).clamp(max=2.0)
-    return (actual - target).square().sum(-1) * wm.moving(env, command_name) * wm.posture_gate(env, terrain_sensor_cfg)
-
-
-def swing_clearance(env, asset_cfg, sensor_cfg, terrain_sensor_cfg, robot_weight, period=1.0, clearance=0.08, std=0.04, command_name="base_velocity"):
-    swing, arc, _ = gait_targets(env, period)
-    z = env.scene[asset_cfg.name].data.body_pos_w[:, asset_cfg.body_ids, 2]
-    height = z - z.min(-1, keepdim=True).values
-    target = clearance * arc
-    score = torch.exp(-torch.abs(height - target) / std)
-    loads = (env.scene.sensors[sensor_cfg.name].data.net_forces_w[:, sensor_cfg.body_ids, 2].clamp(min=0.0) / robot_weight).clamp(0.0, 2.0)
-    support_load = loads.flip([-1])
-    unload_gate = torch.sigmoid((0.15 - loads) * 20.0)
-    support_gate = torch.sigmoid((support_load - 0.35) * 12.0)
-    return (score * swing * unload_gate * support_gate).sum(-1) * wm.moving(env, command_name) * wm.posture_gate(env, terrain_sensor_cfg)
+def joint_position_rel(env):
+    robot = env.scene["robot"]
+    default = robot.data.joint_pos.new_tensor(
+        [REFERENCE["default_joint_angles"][name] for name in robot.joint_names])
+    return robot.data.joint_pos - default
 
 
 def heading_features(env):
-    """Expose heading relative to the world-forward command."""
     yaw = wm.upright_heading(env)
     return torch.stack((torch.sin(yaw), torch.cos(yaw)), dim=-1)
 
 
-
 def rear_foot_height(env, asset_cfg):
-    """Return each rear foot height relative to the lower rear foot."""
     z = env.scene[asset_cfg.name].data.body_pos_w[:, asset_cfg.body_ids, 2]
-    relative = z - z.min(dim=-1, keepdim=True).values
-    return (relative * 10.0).clamp(0.0, 1.0)
+    return ((z - z.min(dim=-1, keepdim=True).values) * 10.0).clamp(0.0, 1.0)
 
 
 def rear_foot_load(env, sensor_cfg, robot_weight):
-    """Expose normalized vertical rear-foot loads to the policy."""
-    forces = env.scene.sensors[sensor_cfg.name].data.net_forces_w[:, sensor_cfg.body_ids, 2]
-    return (forces.clamp(min=0.0) / robot_weight).clamp(0.0, 1.5)
+    force = env.scene[sensor_cfg.name].data.net_forces_w[:, sensor_cfg.body_ids, 2]
+    return (force.clamp(min=0.0) / robot_weight).clamp(0.0, 1.5)
 
 
-def heading_alignment(env, terrain_sensor_cfg, sigma=0.6):
-    yaw = wm.upright_heading(env)
-    wrapped = torch.atan2(torch.sin(yaw), torch.cos(yaw))
-    return torch.exp(-(wrapped / sigma).square()) * wm.posture_gate(env, terrain_sensor_cfg)
-
-
-def swing_forward_position(env, asset_cfg, sensor_cfg, terrain_sensor_cfg, robot_weight,
-                           period=1.0, stride=0.10, command_name="base_velocity"):
-    """Dense phase-conditioned fore-aft swing placement with support-foot gating."""
-    swing, arc, _ = gait_targets(env, period)
-    feet = env.scene[asset_cfg.name].data.body_pos_w[:, asset_cfg.body_ids, :2]
-    relative_x = feet[:, 0, 0] - feet[:, 1, 0]
-    target = stride * (arc[:, 0] - arc[:, 1])
-    loads = rear_foot_load(env, sensor_cfg, robot_weight)
-    swing_load = torch.where(swing, loads, 0.0)
-    support_load = torch.where(swing, loads.flip([-1]), 0.0)
-    unload_gate = torch.sigmoid((0.35 - swing_load) * 10.0)
-    support_gate = torch.sigmoid((support_load - 0.25) * 10.0)
-    error = (relative_x - target).abs()
-    score = torch.exp(-((error / 0.05) ** 2))
-    return score * (swing * unload_gate * support_gate).sum(-1) * wm.moving(
-        env, command_name
-    ) * wm.posture_gate(env, terrain_sensor_cfg)
-
-
-def swing_forward_speed(env, asset_cfg, sensor_cfg, terrain_sensor_cfg, robot_weight,
-                        period=1.0, command_name="base_velocity"):
-    """Reward forward foot motion relative to the body only during swing."""
-    swing, _, _ = gait_targets(env, period)
-    loads = rear_foot_load(env, sensor_cfg, robot_weight)
-    swing_load = torch.where(swing, loads, 0.0)
-    support_load = torch.where(swing, loads.flip([-1]), 0.0)
-    unload_gate = torch.sigmoid((0.35 - swing_load) * 10.0)
-    support_gate = torch.sigmoid((support_load - 0.25) * 10.0)
-    foot_vx = env.scene[asset_cfg.name].data.body_lin_vel_w[:, asset_cfg.body_ids, 0]
-    base_vx = env.scene["robot"].data.root_lin_vel_w[:, 0:1]
-    relative_forward_vx = (foot_vx - base_vx).clamp(0.0, 1.0)
-    reward = (relative_forward_vx * swing * unload_gate * support_gate).sum(-1)
-    return reward * wm.moving(env, command_name) * wm.posture_gate(env, terrain_sensor_cfg)
-
-
-def qualified_touchdown_reward(env, asset_cfg, sensor_cfg, terrain_sensor_cfg,
-                               robot_weight, period=1.0, min_air=0.06,
-                               min_lift=0.02, min_support=0.25,
-                               command_name="base_velocity"):
-    """Reward qualified landings and give a bonus only for alternating feet."""
-    sensor = env.scene.sensors[sensor_cfg.name]
-    data = sensor.data
-    contact_time = data.current_contact_time[:, sensor_cfg.body_ids]
-    contact = contact_time > 0.0
-    z = env.scene[asset_cfg.name].data.body_pos_w[:, asset_cfg.body_ids, 2]
-    height = z - z.min(dim=-1, keepdim=True).values
-    if not hasattr(env, "_v19_prev_contact"):
-        env._v19_prev_contact = contact.clone()
-        env._v19_peak_height = height.clone()
-        env._v19_pending_touchdown = torch.zeros_like(contact)
-        env._v19_last_touchdown_foot = torch.full(
-            (env.num_envs,), -1, dtype=torch.long, device=env.device
-        )
-
-    first_step = env.episode_length_buf <= 1
-    if first_step.any():
-        env._v19_prev_contact[first_step] = contact[first_step]
-        env._v19_peak_height[first_step] = height[first_step]
-        env._v19_pending_touchdown[first_step] = False
-        env._v19_last_touchdown_foot[first_step] = -1
-
-    detached = ~contact
-    env._v19_peak_height = torch.where(
-        detached, torch.maximum(env._v19_peak_height, height), env._v19_peak_height
-    )
-    landing = contact & ~env._v19_prev_contact
-    qualified_air = (
-        (data.last_air_time[:, sensor_cfg.body_ids] >= min_air)
-        & (env._v19_peak_height >= min_lift)
-    )
-    env._v19_pending_touchdown |= landing & qualified_air
-
-    force = data.net_forces_w[:, sensor_cfg.body_ids, 2].clamp(min=0.0)
-    loads = (force / robot_weight).clamp(0.0, 2.0)
-    opposite_support = loads.flip(-1) >= min_support
-    event = env._v19_pending_touchdown & (contact_time >= 0.04) & opposite_support
-    simultaneous = event.all(-1)
-    event &= ~simultaneous[:, None]
-
-    alternating = torch.zeros_like(event)
-    for foot in range(2):
-        alternating[:, foot] = (
-            event[:, foot]
-            & (env._v19_last_touchdown_foot >= 0)
-            & (env._v19_last_touchdown_foot != foot)
-        )
-        env._v19_last_touchdown_foot = torch.where(
-            event[:, foot],
-            torch.full_like(env._v19_last_touchdown_foot, foot),
-            env._v19_last_touchdown_foot,
-        )
-    env._v19_pending_touchdown &= ~event
-    env._v19_prev_contact = contact.clone()
-    env._v19_peak_height = torch.where(
-        contact, torch.zeros_like(height), env._v19_peak_height
-    )
-
-    event_count = event.to(torch.float32).sum(-1)
-    alternate_count = alternating.to(torch.float32).sum(-1)
-    return (event_count + 3.0 * alternate_count) * wm.moving(
-        env, command_name
-    ) * wm.posture_gate(env, terrain_sensor_cfg)
+def validate_layout(env):
+    from .symmetry import mirror_data
+    from .reference_config import REFERENCE
+    action = env.action_manager.get_term("joint_pos")
+    names = list(action._joint_names)
+    dims = {group: sum(int(torch.tensor(d).prod()) for d in shape)
+            for group, shape in env.observation_manager.group_obs_term_dim.items()}
+    if names != JOINT_NAMES or env.action_manager.total_action_dim != 12:
+        raise ValueError(f"Expected 12 ordered actions: {names}")
+    if dims != {"policy": 56, "critic": 155}:
+        raise ValueError(f"Unexpected observation dimensions: {dims}")
+    mirror_data(env, actions=torch.zeros(env.num_envs, 12, device=env.device))
+    s = state(env)
+    expected = {k: v for k, v in REFERENCE["reward_scales"].items() if v != 0}
+    if env.cfg.stage == "balance":
+        expected.pop("contact")
+        expected.pop("feet_clearance")
+    active = {name: env.reward_manager.get_term_cfg(name).weight
+              for name in env.reward_manager.active_terms}
+    if active != expected:
+        raise ValueError(f"Reward scales differ from reference/stage: {active}, {expected}")
+    return {"action_names": names, "native_joint_names": list(env.scene["robot"].joint_names),
+            "observation_dims": dims, "reward_scales": active,
+            "front_foot_ids": s.feet_name_reward_indices, "hind_foot_ids": s.contact_foot_indices}
