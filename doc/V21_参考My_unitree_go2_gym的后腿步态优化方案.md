@@ -85,7 +85,7 @@ PPO 使用上游隐藏层 `[512, 256, 128]`、ELU、初始标准差 `1.0`、学�
 ```bash
 cd /workspace/ry_unitree_rl_lab
 ./ry_python.sh scripts/train_v20.py --stage balance \
-  --num_envs 2048 --max_iterations 15000 --run_name balance \
+  --num_envs 4096 --max_iterations 15000 --run_name balance \
   --headless --device cuda:0
 ```
 
@@ -94,7 +94,7 @@ cd /workspace/ry_unitree_rl_lab
 ```bash
 ./ry_python.sh scripts/train_v20.py --stage walk \
   --resume logs/rsl_rl/ry_unitree_go2_handstand/<平衡训练目录>/model_<迭代>.pt \
-  --num_envs 2048 --max_iterations 15000 --run_name walk \
+  --num_envs 4096 --max_iterations 15000 --run_name walk \
   --headless --device cuda:0
 ```
 

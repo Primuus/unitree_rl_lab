@@ -103,7 +103,7 @@ def configure_stage(cfg, stage):
 @configclass
 class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     stage: str = "balance"
-    scene: ReferenceSceneCfg = ReferenceSceneCfg(num_envs=2048, env_spacing=3.0)
+    scene: ReferenceSceneCfg = ReferenceSceneCfg(num_envs=4096, env_spacing=3.0)
     actions: ReferenceActionsCfg = ReferenceActionsCfg()
     observations: V20ObservationsCfg = V20ObservationsCfg()
     rewards: ReferenceRewardsCfg = ReferenceRewardsCfg()

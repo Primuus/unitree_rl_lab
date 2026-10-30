@@ -11,7 +11,7 @@ faulthandler.enable()
 
 from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--num_envs", type=int, default=2048)
+parser.add_argument("--num_envs", type=int, default=4096)
 parser.add_argument("--max_iterations", type=int, default=15000)
 parser.add_argument("--run_name", default="handstand")
 parser.add_argument("--stage", choices=["balance", "walk"], default="balance")
