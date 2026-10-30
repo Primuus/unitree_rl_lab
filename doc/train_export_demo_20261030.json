@@ -1,0 +1,28 @@
+{
+  "archive": "/workspace/ry_unitree_rl_lab/logs/rsl_rl/ry_unitree_go2_biped_walk_v20/2026-10-30_05-43-10_ry_train_export_demo_20261030/exported/ry_v20_policy_demo_20261030.tar.gz",
+  "archive_bytes": 465668,
+  "archive_sha256": "90caf2ad3591c43abc598ee6736968f26396a1482ecad4cf81c305ad6330ef2a",
+  "training_log": "/workspace/ry_unitree_rl_lab/logs/demo/train_export_v20_demo_20261030.log",
+  "run_directory": "/workspace/ry_unitree_rl_lab/logs/rsl_rl/ry_unitree_go2_biped_walk_v20/2026-10-30_05-43-10_ry_train_export_demo_20261030",
+  "training_iterations": 10,
+  "num_envs": 64,
+  "total_timesteps": 15360,
+  "jit_max_abs_error": 0.0,
+  "onnx_max_abs_error": 3.337860107421875e-06,
+  "evaluation": {
+    "speed": 0.12413845211267471,
+    "upright": 1.0,
+    "falls": 0,
+    "finite": true,
+    "walking_acceptance_passed": false,
+    "touchdowns_mean": [
+      0.0,
+      0.0
+    ],
+    "num_envs": 4,
+    "seconds_per_env": 20.0
+  },
+  "mujoco_deployment_verified": false,
+  "mujoco_gap": "No existing deployment runner matching six hind-leg actions and 38 observations found in the original project.",
+  "local_transfer_authorized": false
+}

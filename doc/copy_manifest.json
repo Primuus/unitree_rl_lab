@@ -1,0 +1,28 @@
+{
+  "created_at_utc": "2026-10-30T05:26:21.614509+00:00",
+  "original_project": "/workspace/unitree_rl_lab",
+  "workspace": "/workspace/ry_unitree_rl_lab",
+  "module": "ry_go2_biped_walk_v20",
+  "task": "RY-Unitree-Go2-Biped-Gait-v20",
+  "shared_framework": "/workspace/unitree_rl_lab",
+  "copied_original_sha256": {
+    "/workspace/unitree_rl_lab/source/unitree_rl_lab/unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk_v20/__init__.py": "4ed7c0679c95d10d0720f5ffdaa5d05327f1da9fa1230987b63486a0419a48a1",
+    "/workspace/unitree_rl_lab/source/unitree_rl_lab/unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk_v20/gait_env_cfg.py": "3e9534c97340abd8165ae4bb7faba684e0454e14d4d7cd88ef6aa03238cce34e",
+    "/workspace/unitree_rl_lab/source/unitree_rl_lab/unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk_v20/gait_mdp.py": "55fee22ae9637acfc7ffd283923720bf877013cb220dccb99f39ba16f74edd0d",
+    "/workspace/unitree_rl_lab/source/unitree_rl_lab/unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk_v20/symmetry.py": "0e14e3bf646a08593594b7b2350aa150424ceffaf36500c15ef3147278d828d0",
+    "/workspace/unitree_rl_lab/scripts/tools/train_go2_biped_v20.py": "314bf1c65eaa611cc6df239d68d33bb6f5965f0e63de12c5f8be33ba8a7cb4b9"
+  },
+  "workspace_sha256": {
+    "ry_python.sh": "ae4e132f3c1fbf7903915249da089439438eff8463bf974c2ace9caf99d2eacc",
+    "scripts/train_v20.py": "83348938f6ae2bde21bd4801d84946acd00146f312943288ecd0337aca31426c",
+    "scripts/eval_v20.py": "08c581522b25ae506146124f51fd9eb7cafe1f35d24c1a868b01a9d3f0451b0a",
+    "ry_go2_biped_walk_v20/symmetry.py": "0e14e3bf646a08593594b7b2350aa150424ceffaf36500c15ef3147278d828d0",
+    "ry_go2_biped_walk_v20/__init__.py": "01bcc50cdb090e8b528a612354318b8d83b1a259a55fd768b5a43a4e699e9566",
+    "ry_go2_biped_walk_v20/gait_env_cfg.py": "20c15c74cb8bfcb14c7db9e82812cee26e47595399dba928e678945587d425b2",
+    "ry_go2_biped_walk_v20/gait_mdp.py": "55fee22ae9637acfc7ffd283923720bf877013cb220dccb99f39ba16f74edd0d",
+    "doc/V20副本说明.md": "c11fa26737f104520e0e99ef10dc27918fca717f237af43b655c0c69be851a26"
+  },
+  "copied_logs": false,
+  "copied_checkpoints": false,
+  "training_started": false
+}
