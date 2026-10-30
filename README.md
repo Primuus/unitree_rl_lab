@@ -9,5 +9,6 @@ Go2 后腿直立训练工作区，基于 Isaac Lab 和 RSL-RL。当前已直接�
 - [实现验证报告](doc/V21_实现与验证.md)
 - [上游来源与适配清单](doc/reference_port_manifest.json)
 - [代码来源与许可证](doc/代码来源说明.md)
+- [本机 MuJoCo 部署](doc/MuJoCo部署说明.md)
 
 旧权重和实验记录保留用于溯源，不作为当前 12 动作策略的初始化依赖。训练模型、日志和导出包不纳入 Git。

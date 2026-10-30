@@ -1,0 +1,86 @@
+{
+  "policy": "models/stage1_balance/exported/policy.pt",
+  "visual_source": "/home/ry/project/quadruped/src/controller/rl/resources/robots/go2",
+  "stage": "balance",
+  "physics_dt": 0.005,
+  "decimation": 4,
+  "kp": 40.0,
+  "kd": 1.0,
+  "action_scale": 0.25,
+  "clip_actions": 100.0,
+  "robot_mass": 16.087,
+  "friction": 1.0,
+  "gait_period": 1.6,
+  "command": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "initial_position": [
+    0.0,
+    0.0,
+    0.52
+  ],
+  "initial_quaternion": [
+    0.7071067811865476,
+    0.0,
+    -0.7071067811865476,
+    0.0
+  ],
+  "action_names": [
+    "FL_hip_joint",
+    "FL_thigh_joint",
+    "FL_calf_joint",
+    "FR_hip_joint",
+    "FR_thigh_joint",
+    "FR_calf_joint",
+    "RL_hip_joint",
+    "RL_thigh_joint",
+    "RL_calf_joint",
+    "RR_hip_joint",
+    "RR_thigh_joint",
+    "RR_calf_joint"
+  ],
+  "observation_joint_names": [
+    "FL_hip_joint",
+    "FR_hip_joint",
+    "RL_hip_joint",
+    "RR_hip_joint",
+    "FL_thigh_joint",
+    "FR_thigh_joint",
+    "RL_thigh_joint",
+    "RR_thigh_joint",
+    "FL_calf_joint",
+    "FR_calf_joint",
+    "RL_calf_joint",
+    "RR_calf_joint"
+  ],
+  "action_offset": [
+    0.1,
+    0.8,
+    -1.5,
+    -0.1,
+    0.8,
+    -1.5,
+    0.1,
+    1.0,
+    -1.5,
+    -0.1,
+    1.0,
+    -1.5
+  ],
+  "initial_joint_pos": [
+    0.0,
+    0.8,
+    -1.5,
+    0.0,
+    0.8,
+    -1.5,
+    0.0,
+    2.25,
+    -1.75,
+    0.0,
+    2.25,
+    -1.75
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "training_commit": "c9f1554a35848d74ab35a01373c619e06971a7ff",
+  "run": "2026-10-30_12-53-36_balance_stage1_balance_1000",
+  "checkpoint": "model_999.pt",
+  "stage": "balance",
+  "policy_file_sha256": {
+    "exported/policy.pt": "196414b42be16950ec419e844603b5d0ebc0c81c3d0d30fcc539fae1cf766296",
+    "exported/policy.onnx": "6a4e24522c62edad9f6cb98f3a5f3ca6369b4e953c3fd6ef7e51487682d41f39",
+    "params/deploy.yaml": "06fae468e249c365a02f99c48b107b83cdc3a8e53e16e86460f86c923b76c231",
+    "params/env.yaml": "4e4c2e0915a48a58ed2f6a84fe7143af567bca5106c526739f2293d4f1607a59",
+    "params/agent.yaml": "ff744c834344e95d086ed0bef4208ed8f45c0844908e3ddfdf3e6df8ea481d6f",
+    "params/provenance.json": "78ce31d943d26f8033c24decbab12d3ad03e9c9416a3881ee2f614ac20d8b427"
+  },
+  "training_urdf": {
+    "origin": "isaac-record:/workspace/unitree_ros/robots/go2_description/urdf/go2_description.urdf",
+    "sha256": "7d19fe48e2e689ee1a032ab99f2a4a8b671d87e73de48d3e65811682a5b48b9e",
+    "mass_kg": 16.087
+  },
+  "visual_source": {
+    "path": "/home/ry/project/quadruped/src/controller/rl/resources/robots/go2",
+    "git_commit": "ac0e6f243fc8b7cb6b4b2601235094e81250a132",
+    "go2_xml_sha256": "6dd698b01ffb84f966feaea5b1eb1c674dad043717cbec4eb0b786f093ba9391"
+  },
+  "notes": [
+    "Original URDF retained; runtime converts its primitive collisions and inertias.",
+    "Visual mesh files remain in the existing local quadruped project.",
+    "Models and experimental outputs are excluded from Git."
+  ]
+}
