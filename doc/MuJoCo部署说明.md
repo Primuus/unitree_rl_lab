@@ -17,7 +17,7 @@ cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 conda activate RL
 python deploy.py
 python deploy.py --policy models/stage1_balance_continue1998/exported/policy.onnx
-python deploy.py --headless --duration 20 --output outputs/balance_continue1998_20s.json
+python deploy.py --headless --duration 20 --output outputs/balance_continue1998_velocity_limits_20s.json
 ```
 
 `--duration 0` 表示持续运行；`--headless` 不限制到实时速度。输出 JSON 包含统计和每个策略步的轨迹，重置后重新统计。`--config` 可指定部署 JSON 配置；相对策略路径相对于部署代码目录。
@@ -73,12 +73,24 @@ cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 conda run -n RL python -B -m unittest test_deployment -v
 ```
 
-四项检查覆盖观测坐标和关节排列、接触力方向与重量、URDF 质量及限位、PT/ONNX 推理一致性。模型文件是正式部署输入，不依赖测试产物。
+五项检查覆盖观测坐标和关节排列、接触力方向与重量、URDF 质量及限位、首步关节限速与位移一致性、PT/ONNX 推理一致性。模型文件是正式部署输入，不依赖测试产物。
 
-续训最终策略在 MuJoCo 的 20 秒无界面运行中数值有限，但约 2 秒内倒下，姿态与高度同时达标比例为 3.8%，前脚触地比例为 17.6%。同一 checkpoint 在 Isaac Lab 的 4 环境、20 秒独立评估中平均高度为 0.505 m，姿态与高度同时达标比例为 95.3%，速度误差约 0.216 m/s，无摔倒，但平衡验收仍未通过。MuJoCo 中的倾倒比 Isaac 明显，说明跨仿真的表现差异仍未解决；部署链路可运行不代表 sim2sim 成功。
+补齐限速前，续训最终策略在 MuJoCo 的 20 秒无界面运行中数值有限，但约 2 秒内倒下，姿态与高度同时达标比例为 3.8%，前脚触地比例为 17.6%。同一 checkpoint 在 Isaac Lab 的 4 环境、20 秒独立评估中平均高度为 0.505 m，姿态与高度同时达标比例为 95.3%，速度误差约 0.216 m/s，无摔倒，但平衡验收仍未通过。MuJoCo 中的倾倒比 Isaac 明显，说明跨仿真的表现差异仍未解决；部署链路可运行不代表 sim2sim 成功。
 
-Isaac 评估记录保留于服务器 `logs/evaluation/stage1_continue_final_1998.*`；MuJoCo 正式评估记录留在本机 `outputs/balance_continue1998_20s.json`。后续可直接替换同观测/动作契约的策略文件观看新结果。
+Isaac 评估记录保留于服务器 `logs/evaluation/stage1_continue_final_1998.*`；MuJoCo 正式评估记录留在本机 `outputs/balance_continue1998_velocity_limits_20s.json`。后续可直接替换同观测/动作契约的策略文件观看新结果。
 
 上一轮 model_999 的策略保留于 `models/stage1_balance/`，历史 MuJoCo 记录为 `outputs/balance_20s.json`。可用 `./run.sh --policy models/stage1_balance/exported/policy.pt` 对照查看。
 
 视觉适配显式设置 `type="mesh"`，保留参考 XML 的网格类型；移除默认类时不能丢失该属性，否则外观会被渲染为球体。已检查 33 个视觉网格，并确认修正前后的 20 秒物理轨迹完全一致。
+
+## 关节限速适配与验证
+
+此前部署只读取 URDF 的角度和力矩限制，遗漏了训练 PhysX 实际启用的关节速度限制。运行时核对：hip/thigh 为 30.1 rad/s，calf 为 15.7 rad/s；armature 和关节摩擦均为零。相同初始状态下，Actor 的首步输出一致，服务器导出策略与 checkpoint Actor 在前 100 个控制步的输出误差为零。初始关节和足端运动学也对应。
+
+当前转换器将原始 URDF 的 `limit.velocity` 保存在 `jnt_user[:,0]`。每个物理步之后，把受控关节的速度投影到该范围，并按 `implicitfast` 的积分方式修正这一步的关节位置增量；不修改浮动基座位姿或速度。只裁剪速度、不修正该步关节位移，在诊断中仍会失稳。
+
+这是对 PhysX 求解器限速的数值近似，未复现约束冲量向整个系统的耦合传播，也不等同于真实电机的力矩—速度曲线。它会改变 MuJoCo 动力学轨迹；不能据此宣称两引擎物理等价或完成了可靠的 sim2sim 迁移。配置中的 PD、策略周期、物理步长、质量和接触参数保持原值，未采用诊断中尝试的接触刚度修改。
+
+固定初始状态、同一个 model_1998 的 20 秒无界面验证中，限速适配后未再直接倾倒，姿态与高度同时达标比例为 96.5%，前脚触地比例为零；平均绝对前向速度仍为 0.425 m/s，尚未达到原地站稳。约第 18 秒出现短暂下蹲和倾斜，最低高度 0.350 m、最低直立余弦 0.840，随后恢复；不能描述为全程稳定站立。该结果只代表当前初始状态下的一次回放，不是多初始状态的稳健性验收。
+
+修正前的记录保留在 `outputs/balance_continue1998_20s.json`，修正后为 `outputs/balance_continue1998_velocity_limits_20s.json`。服务器的初始状态/运行时参数诊断保存在 `logs/evaluation/sim2sim_exact_initial_1998.*`。MuJoCo 关节属性与积分语义参见 [XML 参考](https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-joint) 和 [数值积分说明](https://mujoco.readthedocs.io/en/stable/computation.html#numerical-integration)。

@@ -40,8 +40,10 @@ class Simulation:
         self.policy = Policy(policy_path)
         self.base = self.model.body("base").id
         names = config["action_names"]
+        self.jids = np.array([self.model.joint(n).id for n in names])
         self.qids = np.array([self.model.joint(n).qposadr[0] for n in names])
         self.vids = np.array([self.model.joint(n).dofadr[0] for n in names])
+        self.velocity_limits = self.model.jnt_user[self.jids, 0]
         self.aids = np.array([self.model.actuator(n).id for n in names])
         self.feet = [self.model.site(n+"_foot").id for n in ["FL", "FR", "RL", "RR"]]
         self.foot_geoms = {self.model.geom(n+"_foot_collision_0").id: i
@@ -58,6 +60,7 @@ class Simulation:
         self.last_action.fill(0)
         self.target = np.asarray(self.cfg["initial_joint_pos"])
         self.steps = 0
+        self.velocity_limit_applications = 0
         self.records = []
         mujoco.mj_forward(self.model, self.data)
 
@@ -102,6 +105,14 @@ class Simulation:
         limits = self.model.actuator_ctrlrange[self.aids]
         self.data.ctrl[self.aids] = np.clip(torque, limits[:, 0], limits[:, 1])
         mujoco.mj_step(self.model, self.data)
+        # Approximate the URDF velocity bounds enforced by PhysX during training.
+        # implicitfast integrates position with the new velocity: project both
+        # joint velocity and its position increment, leaving the free base alone.
+        velocity = self.data.qvel[self.vids]
+        bounded = np.clip(velocity, -self.velocity_limits, self.velocity_limits)
+        self.velocity_limit_applications += int(np.count_nonzero(velocity != bounded))
+        self.data.qpos[self.qids] += (bounded-velocity)*self.model.opt.timestep
+        self.data.qvel[self.vids] = bounded
         # Refresh state-derived values at the integrated qpos/qvel for the next policy call.
         mujoco.mj_forward(self.model, self.data)
         self.steps += 1
@@ -112,6 +123,8 @@ class Simulation:
         r = self.records
         upright = [v["upright_cos"] > .94 and v["position"][2] > .43 for v in r]
         return {"simulation_seconds": float(self.data.time), "policy_steps": len(r),
+                "joint_velocity_limit_mode": "project_velocity_and_position",
+                "velocity_limit_applications": self.velocity_limit_applications,
                 "upright_fraction": float(np.mean(upright)) if r else 0.,
                 "front_contact_fraction": float(np.mean([v["front_contact"] for v in r])) if r else 0.,
                 "mean_abs_forward_speed": float(np.mean([abs(v["forward_speed"]) for v in r])) if r else 0.,

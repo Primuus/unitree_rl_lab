@@ -37,6 +37,7 @@ def load_model(config, root):
                   autolimits="true", fusestatic="true")
     ET.SubElement(xml, "option", timestep=str(config["physics_dt"]),
                   gravity="0 0 -9.81", integrator="implicitfast", cone="elliptic")
+    ET.SubElement(xml, "size", nuser_jnt="1")
     defaults = ET.SubElement(xml, "default")
     ET.SubElement(defaults, "geom", friction=numbers([config["friction"], .005, .0001]),
                   condim="3")
@@ -58,7 +59,8 @@ def load_model(config, root):
             ET.SubElement(body, "joint", name=joint.get("name"), type="hinge",
                           axis=joint.find("axis").get("xyz"),
                           range=f'{limit.get("lower")} {limit.get("upper")}',
-                          damping="0", armature="0", frictionloss="0")
+                          damping="0", armature="0", frictionloss="0",
+                          user=limit.get("velocity"))
             effort = float(limit.get("effort"))
             ET.SubElement(motors, "motor", name=joint.get("name"),
                           joint=joint.get("name"), ctrlrange=numbers([-effort, effort]))

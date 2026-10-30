@@ -28,5 +28,12 @@
   ],
   "checkpoint_sha256": "dfa99e5d5cd44cb3b5bfdf2d35f2e1f8c7af25ccb0015a33914d29b57e9e80a3",
   "local_model_directory": "deploy/mujoco/models/stage1_balance_continue1998",
-  "total_training_iterations": 2000
+  "total_training_iterations": 2000,
+  "joint_velocity_limits": {
+    "source": "Original URDF limit.velocity; verified against Isaac Lab runtime joint_vel_limits",
+    "hip_thigh_rad_s": 30.1,
+    "calf_rad_s": 15.7,
+    "implementation": "Project joint velocity and its position increment after each implicitfast physics step; numerical approximation to PhysX limits, not an equivalent constrained solve",
+    "validation": "deploy/mujoco/outputs/balance_continue1998_velocity_limits_20s.json"
+  }
 }

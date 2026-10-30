@@ -68,6 +68,17 @@ class DeploymentTests(unittest.TestCase):
                                        [float(limit.get("lower")), float(limit.get("upper"))])
             np.testing.assert_allclose(model.actuator(name).ctrlrange,
                                        [-float(limit.get("effort")), float(limit.get("effort"))])
+            self.assertAlmostEqual(model.jnt_user[model.joint(name).id, 0],
+                                   float(limit.get("velocity")))
+
+    def test_first_step_velocity_limit_and_position_increment(self):
+        sim = Simulation(CFG, ROOT/CFG["policy"])
+        before = sim.data.qpos[sim.qids].copy()
+        sim.step()
+        self.assertGreater(sim.velocity_limit_applications, 0)
+        self.assertTrue(np.all(np.abs(sim.data.qvel[sim.vids]) <= sim.velocity_limits))
+        self.assertTrue(np.all(np.abs(sim.data.qpos[sim.qids]-before)
+                               <= sim.velocity_limits*sim.model.opt.timestep+1e-12))
 
     def test_exported_policy_backends(self):
         policy_path = ROOT/CFG["policy"]
