@@ -13,6 +13,7 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--num_envs", type=int, default=4096)
 parser.add_argument("--max_iterations", type=int, default=15000)
+parser.add_argument("--save_interval", type=int, help="Checkpoint interval in PPO iterations")
 parser.add_argument("--run_name", default="handstand")
 parser.add_argument("--stage", choices=["balance", "walk"], default="balance")
 parser.add_argument("--resume", type=Path)
@@ -55,6 +56,8 @@ def main():
     agent_cfg = load_cfg_from_registry(TASK, "rsl_rl_cfg_entry_point")
     agent_cfg.seed, agent_cfg.device = args.seed, args.device
     agent_cfg.max_iterations = args.max_iterations
+    if args.save_interval is not None:
+        agent_cfg.save_interval = args.save_interval
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
     log_dir = Path("logs/rsl_rl") / agent_cfg.experiment_name / f"{stamp}_{args.stage}_{args.run_name}"
     log_dir.mkdir(parents=True, exist_ok=False)
