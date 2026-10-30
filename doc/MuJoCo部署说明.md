@@ -9,25 +9,25 @@ cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 ./run.sh
 ```
 
-默认加载本次 stage1 最终 TorchScript 策略，平地、零速度命令，从后腿直立附近开始。按 `R` 重置，空格暂停/继续；关闭窗口或 Ctrl+C 退出。窗口按 60 Hz 同步，仿真尽量以实时速度运行。倒下后继续显示实际状态，不自动重置或关闭电机。
+默认加载最新 model_2996 的 TorchScript 策略（站立线速度奖励分母 0.01），平地、零速度命令，从后腿直立附近开始。按 `R` 重置，空格暂停/继续；关闭窗口或 Ctrl+C 退出。窗口按 60 Hz 同步，仿真尽量以实时速度运行。倒下后继续显示实际状态，不自动重置或关闭电机。
 
 也可在已激活的环境中运行：
 
 ```bash
 conda activate RL
 python deploy.py
-python deploy.py --policy models/stage1_balance_continue1998/exported/policy.onnx
-python deploy.py --headless --duration 20 --output outputs/balance_continue1998_velocity_limits_20s.json
+python deploy.py --policy models/stage1_balance_sigma001_2996/exported/policy.onnx
+python deploy.py --headless --duration 20 --output outputs/balance_sigma001_2996_20s.json
 ```
 
 `--duration 0` 表示持续运行；`--headless` 不限制到实时速度。输出 JSON 包含统计和每个策略步的轨迹，重置后重新统计。`--config` 可指定部署 JSON 配置；相对策略路径相对于部署代码目录。
 
 ## 策略和本地依赖
 
-- 训练提交：`c92c7b908fad828afd1bfd17b1dd5c6b67f68ddd`。
-- 训练目录：`2026-10-30_13-35-22_balance_stage1_balance_continue1000`。
-- checkpoint：`model_1998.pt`，首轮 1000 次加续训 1000 次，共 2000 次更新（恢复时迭代标签从 999 开始）；导出文件为 `policy.pt` 和 `policy.onnx`。
-- 部署文件保存在 `deploy/mujoco/models/stage1_balance_continue1998/`，包括 `exported/` 和 `params/`，不提交 Git。
+- 对应训练代码本地提交：`afb2fdd467495aac0170ef6517ed2367b413e5c9`（未推送 GitHub）。
+- 训练目录：`2026-10-30_14-40-31_balance_balance_sigma001_continue500`。
+- checkpoint：`model_2996.pt`，累计 3000 次更新（恢复时迭代标签有重叠）；导出文件为 `policy.pt` 和 `policy.onnx`。
+- 部署文件保存在 `deploy/mujoco/models/stage1_balance_sigma001_2996/`，包括 `exported/` 和 `params/`，不提交 Git。
 - 使用 `/home/ry/miniconda3/envs/RL`；验证版本为 Python 3.13.13、MuJoCo 3.8.1、PyTorch 2.12.0+cpu、ONNX Runtime 1.27.0。
 - 视觉资源复用 `/home/ry/project/quadruped/src/controller/rl/resources/robots/go2/go2.xml` 和 `obj/`，由 `config.json` 的 `visual_source` 指定。不修改该工程，不复制或传输其约 28 MB 网格。
 - 策略来源、文件哈希和机器人资源来源见 [来源清单](mujoco_deployment_manifest.json)。新机器需要提供这些本地依赖；从 Git 拉取代码不会自动下载模型和网格。
@@ -75,11 +75,15 @@ conda run -n RL python -B -m unittest test_deployment -v
 
 五项检查覆盖观测坐标和关节排列、接触力方向与重量、URDF 质量及限位、首步关节限速与位移一致性、PT/ONNX 推理一致性。模型文件是正式部署输入，不依赖测试产物。
 
-补齐限速前，续训最终策略在 MuJoCo 的 20 秒无界面运行中数值有限，但约 2 秒内倒下，姿态与高度同时达标比例为 3.8%，前脚触地比例为 17.6%。同一 checkpoint 在 Isaac Lab 的 4 环境、20 秒独立评估中平均高度为 0.505 m，姿态与高度同时达标比例为 95.3%，速度误差约 0.216 m/s，无摔倒，但平衡验收仍未通过。MuJoCo 中的倾倒比 Isaac 明显，说明跨仿真的表现差异仍未解决；部署链路可运行不代表 sim2sim 成功。
+最新 model_2996 已下载 PT、ONNX 和配套配置，共 1,613,197 字节，六个文件 SHA256 均与服务器一致。部署控制配置与旧策略相同。固定初始状态的 20 秒 MuJoCo 验证中，直立判定比例 100%，前脚触地比例 0，平均绝对前向速度 0.11445 m/s，数值有限；仍有漂移。记录位于 `outputs/balance_sigma001_2996_20s.json`。本结果使用下述既有限速数值近似，不代表两引擎物理等价，也不是多初始状态的稳健性验收。
+
+历史 model_1998：补齐限速前，该策略在 MuJoCo 的 20 秒无界面运行中数值有限，但约 2 秒内倒下，姿态与高度同时达标比例为 3.8%，前脚触地比例为 17.6%。同一 checkpoint 在 Isaac Lab 的 4 环境、20 秒独立评估中平均高度为 0.505 m，姿态与高度同时达标比例为 95.3%，速度误差约 0.216 m/s，无摔倒，但平衡验收仍未通过。MuJoCo 中的倾倒比 Isaac 明显，说明跨仿真的表现差异仍未解决；部署链路可运行不代表 sim2sim 成功。
 
 Isaac 评估记录保留于服务器 `logs/evaluation/stage1_continue_final_1998.*`；MuJoCo 正式评估记录留在本机 `outputs/balance_continue1998_velocity_limits_20s.json`。后续可直接替换同观测/动作契约的策略文件观看新结果。
 
-上一轮 model_999 的策略保留于 `models/stage1_balance/`，历史 MuJoCo 记录为 `outputs/balance_20s.json`。可用 `./run.sh --policy models/stage1_balance/exported/policy.pt` 对照查看。
+历史 model_1998 保留于 `models/stage1_balance_continue1998/`，可用 `./run.sh --policy models/stage1_balance_continue1998/exported/policy.pt` 对照。
+
+历史 model_999 的策略保留于 `models/stage1_balance/`，历史 MuJoCo 记录为 `outputs/balance_20s.json`。可用 `./run.sh --policy models/stage1_balance/exported/policy.pt` 对照查看。
 
 视觉适配显式设置 `type="mesh"`，保留参考 XML 的网格类型；移除默认类时不能丢失该属性，否则外观会被渲染为球体。已检查 33 个视觉网格，并确认修正前后的 20 秒物理轨迹完全一致。
 

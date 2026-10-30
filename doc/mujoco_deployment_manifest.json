@@ -1,15 +1,15 @@
 {
-  "training_commit": "c92c7b908fad828afd1bfd17b1dd5c6b67f68ddd",
-  "run": "2026-10-30_13-35-22_balance_stage1_balance_continue1000",
-  "checkpoint": "model_1998.pt",
+  "training_commit": "afb2fdd467495aac0170ef6517ed2367b413e5c9",
+  "run": "2026-10-30_14-40-31_balance_balance_sigma001_continue500",
+  "checkpoint": "model_2996.pt",
   "stage": "balance",
   "policy_file_sha256": {
-    "exported/policy.pt": "789ea85d2e37d98e8cf253ff1686abb8db0bc4674c676935da5d33424130359a",
-    "exported/policy.onnx": "b5d21066ca6869ae1c812db878fd5c31dc91b7ad7f7d646be2817d4889098429",
+    "exported/policy.pt": "7dbb0217e5625f76ca600ba5634c2a8d9a2144fd3a34b6366f68919a861543c7",
+    "exported/policy.onnx": "78131da64d3f60cbef3c63e63f269f8a0cf7ca33a1953897681ce597731775ad",
     "params/deploy.yaml": "06fae468e249c365a02f99c48b107b83cdc3a8e53e16e86460f86c923b76c231",
-    "params/env.yaml": "4e4c2e0915a48a58ed2f6a84fe7143af567bca5106c526739f2293d4f1607a59",
-    "params/agent.yaml": "ff744c834344e95d086ed0bef4208ed8f45c0844908e3ddfdf3e6df8ea481d6f",
-    "params/provenance.json": "882fcec4886120d318af5efe57cc07bd7eab2bcbf6241e738845949534633032"
+    "params/env.yaml": "34123fb5ff8da9b11d7b1ac3c98e0758c7d27ab4df680c656e8fb69b57ede4ec",
+    "params/agent.yaml": "e7dccdfd83d9c3c59a2e092b921e2bd6c7fe51209911737d3aed06d879c558a1",
+    "params/provenance.json": "53459af7a808f54325f5c11d78640c2d1ad1f9c9cdeb26ae021445a4219b02e2"
   },
   "training_urdf": {
     "origin": "isaac-record:/workspace/unitree_ros/robots/go2_description/urdf/go2_description.urdf",
@@ -26,14 +26,24 @@
     "Visual mesh files remain in the existing local quadruped project.",
     "Models and experimental outputs are excluded from Git."
   ],
-  "checkpoint_sha256": "dfa99e5d5cd44cb3b5bfdf2d35f2e1f8c7af25ccb0015a33914d29b57e9e80a3",
-  "local_model_directory": "deploy/mujoco/models/stage1_balance_continue1998",
-  "total_training_iterations": 2000,
+  "checkpoint_sha256": "a5f8ce698a18fae986b7890eb8a2d7cc7255b9cb6f0c7c111597e2b49f0e225b",
+  "local_model_directory": "deploy/mujoco/models/stage1_balance_sigma001_2996",
+  "total_training_iterations": 3000,
   "joint_velocity_limits": {
     "source": "Original URDF limit.velocity; verified against Isaac Lab runtime joint_vel_limits",
     "hip_thigh_rad_s": 30.1,
     "calf_rad_s": 15.7,
     "implementation": "Project joint velocity and its position increment after each implicitfast physics step; numerical approximation to PhysX limits, not an equivalent constrained solve",
     "validation": "deploy/mujoco/outputs/balance_continue1998_velocity_limits_20s.json"
+  },
+  "latest_mujoco_validation": {
+    "output": "deploy/mujoco/outputs/balance_sigma001_2996_20s.json",
+    "duration_s": 20,
+    "upright_fraction": 1.0,
+    "front_contact_fraction": 0.0,
+    "mean_abs_forward_speed_mps": 0.11445148872124264,
+    "finite": true,
+    "joint_velocity_limit_mode": "project_velocity_and_position",
+    "scope": "One fixed initial state; existing numerical velocity-limit approximation retained"
   }
 }
