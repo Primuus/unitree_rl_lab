@@ -253,7 +253,7 @@ class ReferencePortTests(unittest.TestCase):
                 self.assertEqual(cfg.rewards.phase_contact_error.weight, -2.)
                 self.assertEqual(cfg.rewards.phase_contact_error.params, {"name": "phase_contact_error"})
             command = cfg.commands.base_velocity
-            self.assertEqual(command.ranges.lin_vel_x, (.05, .10) if stage == "balance" else (.05, .05))
+            self.assertEqual(command.ranges.lin_vel_x, (.05, .10) if stage == "balance" else (.5, .5))
             self.assertEqual(command.rel_standing_envs, .5 if stage == "balance" else 0.)
             self.assertEqual(command.ranges.lin_vel_y, (0., 0.))
             self.assertEqual(command.ranges.ang_vel_z, (0., 0.))

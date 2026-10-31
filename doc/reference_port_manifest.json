@@ -64,7 +64,8 @@
     "Subsequent user request raises only balance feet_clearance from 0.4 to 1.0; contact remains 0.9, walk clearance remains 0.4",
     "User-approved balance additions: tracking_ang_vel_zero=-0.2 from reference Leggedstand (world-Z adaptation), heading_alignment=+1.5 with std=0.6 from recorded original V7/V20 formula; 26 balance terms, walk unchanged. Heading target fixed world +X; observations unchanged.",
     "User-approved balance phase clock always visible to Actor/Critic; adds feet_clearance_deficit=-1.0 for scheduled swing foot. Balance now 27 terms; walk remains 23 and command-gated. New provenance records gait_clock; legacy replay restores moving_only.",
-    "2026-10-31 supersedes prior stage-specific settings: balance samples 50% zero and 50% uniform forward 0.05..0.10 m/s every 10 s; walk keeps fixed 0.2 m/s. Both share the existing 27 balance rewards, always-visible phase and tracking denominators 0.0025/0.04. Evaluation forces separate fixed commands; no PPO updates in this change."
+    "2026-10-31 supersedes prior stage-specific settings: balance samples 50% zero and 50% uniform forward 0.05..0.10 m/s every 10 s; walk keeps fixed 0.2 m/s. Both share the existing 27 balance rewards, always-visible phase and tracking denominators 0.0025/0.04. Evaluation forces separate fixed commands; no PPO updates in this change.",
+    "2026-10-31 user request: walk forward command changed from fixed 0.05 to fixed 0.5 m/s; lateral/yaw remain zero. Balance distribution, 6cm peak, 1.6s gait period, tracking denominator .0025 and PPO remain unchanged. No training launched; narrow velocity feedback diagnosed separately."
   ],
   "policy_source": {
     "init_noise_std": 1.0,
@@ -277,16 +278,16 @@
     "stage": "walk",
     "zero_probability": 0.0,
     "forward_range_mps": [
-      0.05,
-      0.05
+      0.5,
+      0.5
     ],
     "lateral_mps": 0.0,
     "yaw_radps": 0.0,
     "resampling_s": 10.0,
     "automatic_speed_curriculum": false,
-    "walk_entry_forward_mps": 0.05,
+    "walk_entry_forward_mps": 0.5,
     "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "The 500-update stage2 v2 continuation completed at model_6988 and three evaluations finished. No sustained alternating gait; no further training started.",
+    "status": "model_6988 completed training at 0.05 m/s. User changed next walk target to 0.5 m/s; not yet trained. Diagnostic probe and convergence report available.",
     "front_only_regularizers": [
       "default_pos",
       "symmetric_joints"
@@ -317,7 +318,10 @@
     },
     "expected_final_iteration": 6988,
     "latest_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_14-00-27_walk_stage2_gait_penalty_continue500/model_6988.pt",
-    "evaluation_record": "doc/Stage2_步态惩罚加强后500轮评估.md"
+    "evaluation_record": "doc/Stage2_步态惩罚加强后500轮评估.md",
+    "latest_trained_forward_mps": 0.05,
+    "pending_target_forward_mps": 0.5,
+    "speed_diagnosis_record": "doc/Stage2_目标0.5mps与训练收敛诊断.md"
   },
   "height_reward_and_task_gates": {
     "height_target_m": 0.52,
