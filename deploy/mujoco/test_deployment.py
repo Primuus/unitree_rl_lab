@@ -90,6 +90,26 @@ class DeploymentTests(unittest.TestCase):
         for obs in inputs:
             np.testing.assert_allclose(pt(obs), onnx(obs), rtol=1e-4, atol=2e-5)
 
+    def test_acceptance_rejects_turning_and_excludes_post_failure_motion(self):
+        sim = Simulation(CFG, ROOT/CFG['policy'])
+        sim.data.time = 20.
+        sim.records = [dict(time=i*.02, position=[0., 0., .52], upright_cos=1.,
+                            forward_speed=0., front_contact=False, base_contact=False,
+                            heading_yaw_rad=float(np.arctan2(np.sin(i*.01), np.cos(i*.01))),
+                            yaw_rate_world_radps=.5) for i in range(1000)]
+        result = sim.result()
+        self.assertFalse(result['balance_acceptance_passed'])
+        self.assertAlmostEqual(result['net_heading_change_rad'], 9.99)
+        self.assertEqual(result['balance_acceptance']['failed_checks'], ['yaw_rate', 'heading_excursion'])
+        sim.records[800]['base_contact'] = True
+        for record in sim.records[800:]:
+            record['position'] = [100., 100., 0.]
+        result = sim.result()
+        self.assertEqual(result['horizontal_path_length_m'], 0.)
+        self.assertEqual(result['balance_acceptance']['values']['valid_seconds'], 16.)
+        self.assertAlmostEqual(result['net_heading_change_rad'], 7.99)
+        self.assertIn('no_failure', result['balance_acceptance']['failed_checks'])
+
 
 if __name__ == "__main__":
     unittest.main()

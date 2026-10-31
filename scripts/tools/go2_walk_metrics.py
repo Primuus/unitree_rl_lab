@@ -1,5 +1,6 @@
 """Reset-safe gait evidence with force hysteresis and qualified landings."""
 import torch
+from ry_unitree_rl_lab.utils.balance_acceptance import assess_balance
 
 class GaitMetrics:
     def __init__(self, raw, robot, foot_ids, sensor, sensor_ids, wm, scanner):
@@ -16,6 +17,11 @@ class GaitMetrics:
         self.cycle_steps=round(1.6/raw.step_dt)
         self.min_landing_height=.008 if raw.cfg.stage=='balance' else .02
         yaw=wm.upright_heading(raw); self.forward=torch.stack((torch.cos(yaw),torch.sin(yaw)),-1)
+        self.previous_yaw=yaw.clone()
+        self.heading_change=torch.zeros(n,device=d)
+        self.max_heading_excursion=self.heading_change.clone()
+        self.absolute_heading_travel=self.heading_change.clone()
+        self.horizontal_path_length=torch.zeros(n,device=d)
         self.contact=torch.ones(n,2,dtype=torch.bool,device=d)
         self.air=torch.zeros(n,2,device=d); self.peak=self.air.clone(); self.duration=self.air.clone()
         self.landing_air=self.air.clone(); self.landing_peak=self.air.clone()
@@ -64,7 +70,16 @@ class GaitMetrics:
                     horizontal_speed=robot.data.root_lin_vel_w[:,:2].norm(dim=-1),
                     yaw_rate_abs=robot.data.root_ang_vel_w[:,2].abs())
         for key,value in values.items(): self.sums[key]+=value*valid
-        self.count+=valid.float(); self.end=torch.where(valid[:,None],robot.data.root_pos_w[:,:2],self.end)
+        self.count+=valid.float()
+        next_position=torch.where(valid[:,None],robot.data.root_pos_w[:,:2],self.end)
+        self.horizontal_path_length+=(next_position-self.end).norm(dim=-1)
+        self.end=next_position
+        delta=yaw-self.previous_yaw
+        delta=torch.where(valid,torch.atan2(torch.sin(delta),torch.cos(delta)),0.)
+        self.heading_change+=delta
+        self.absolute_heading_travel+=delta.abs()
+        self.max_heading_excursion=torch.maximum(self.max_heading_excursion,self.heading_change.abs())
+        self.previous_yaw=torch.where(valid,yaw,self.previous_yaw)
         distance=(self.end-self.start).norm(dim=-1)
         self.max_horizontal_displacement=torch.maximum(self.max_horizontal_displacement,distance)
         if (step+1)%self.cycle_steps==0:
@@ -87,7 +102,15 @@ class GaitMetrics:
         passed=((seconds>=15)&(self.resets==0)&(per['upright']>0.95)&(per['speed_error']<=0.04)&(per['front_contact']<0.01)&(per['flight']<0.1)
                 &(per['single_support']>0.15)&(per['single_support']<0.9)&(self.touch.min(-1).values>=4)
                 &(displacement>(self.raw.command_manager.get_command('base_velocity')[:,0]-0.04).clamp(min=0)*seconds)&(alternate>0.8)&(per['stance_slip_speed']<0.12))
-        balance_passed=(seconds>=15)&(self.resets==0)&(per['upright']>0.95)&(per['front_contact']<0.01)&(per['speed_error']<=0.04)
+        path_speed=self.horizontal_path_length/seconds.clamp(min=self.raw.step_dt)
+        balance_reports=[assess_balance(dict(
+            valid_seconds=float(seconds[i]),failures=int(self.resets[i]),
+            upright_fraction=float(per['upright'][i]),front_contact_fraction=float(per['front_contact'][i]),
+            forward_error_mps=float(per['speed_error'][i]),mean_abs_yaw_rate_radps=float(per['yaw_rate_abs'][i]),
+            max_heading_excursion_rad=float(self.max_heading_excursion[i]),
+            max_horizontal_displacement_m=float(self.max_horizontal_displacement[i]),
+            path_speed_mps=float(path_speed[i])),has_policy and self.raw.cfg.stage=='balance')
+            for i in range(self.raw.num_envs)]
         result={key:float(value.mean()) for key,value in per.items()}
         result.update(falls=self.falls,resets_total=int(self.resets.sum()),termination_counts=self.terminations,
                       touchdowns_mean=self.touch.float().mean(0).tolist(),raw_touchdowns_mean=self.raw_touch.float().mean(0).tolist(),
@@ -95,11 +118,18 @@ class GaitMetrics:
                       net_forward_displacement_m=displacement.tolist(),alternation_fraction_per_env=alternate.tolist(),
                       net_horizontal_displacement_m=(self.end-self.start).norm(dim=-1).tolist(),
                       max_horizontal_displacement_m=self.max_horizontal_displacement.tolist(),
+                      horizontal_path_length_m=self.horizontal_path_length.tolist(),
+                      path_speed_mps=path_speed.tolist(),
+                      net_heading_change_rad=self.heading_change.tolist(),
+                      max_heading_excursion_rad=self.max_heading_excursion.tolist(),
+                      absolute_heading_travel_rad=self.absolute_heading_travel.tolist(),
                       cycle_duration_s=self.cycle_steps*self.raw.step_dt,
                       cycle_displacements=self.cycle_displacements,
                       landing_thresholds=dict(min_air_s=.06,min_lift_m=self.min_landing_height,min_support_s=.04),
                       alternating_steps_per_env=((self.touch.min(-1).values>=4)&(alternate>.8)).tolist(),
                       max_relative_foot_height=self.max_height.amax(0).tolist(),walking_acceptance_per_env=passed.tolist(),
                       walking_acceptance_passed=bool(has_policy and self.raw.cfg.stage=='walk' and passed.all()),
-                      balance_acceptance_passed=bool(has_policy and self.raw.cfg.stage=='balance' and balance_passed.all()))
+                      balance_acceptance_per_env=[v['passed'] for v in balance_reports],
+                      balance_acceptance_reports=balance_reports,
+                      balance_acceptance_passed=all(v['passed'] for v in balance_reports))
         return result

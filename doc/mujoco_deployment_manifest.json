@@ -47,9 +47,59 @@
   "trained_peak_foot_height_m": 0.02,
   "pending_training_peak_foot_height_m": 0.06,
   "latest_mujoco_validation": {
-    "output": "deploy/mujoco/outputs/balance_clearance10_5990_1ms_20s.json",
+    "output": "deploy/mujoco/outputs/balance_clearance10_5990_acceptance_v2_20s.json",
     "simulation_seconds": 20.00000000000146,
     "policy_steps": 1000,
+    "balance_acceptance_passed": false,
+    "balance_acceptance": {
+      "version": "stationary-v2",
+      "thresholds": {
+        "min_valid_seconds": 15.0,
+        "min_upright_fraction_exclusive": 0.95,
+        "max_front_contact_fraction_exclusive": 0.01,
+        "max_forward_error_mps": 0.04,
+        "max_mean_abs_yaw_rate_radps": 0.05,
+        "max_heading_excursion_rad": 0.2617993877991494,
+        "max_horizontal_displacement_m": 0.2,
+        "max_path_speed_mps": 0.04
+      },
+      "values": {
+        "valid_seconds": 20.0,
+        "failures": 0,
+        "upright_fraction": 1.0,
+        "front_contact_fraction": 0.0,
+        "forward_error_mps": 0.1164165684087202,
+        "mean_abs_yaw_rate_radps": 0.9474555072291121,
+        "max_heading_excursion_rad": 5.848791487220968,
+        "max_horizontal_displacement_m": 0.7221778452554436,
+        "path_speed_mps": 0.11796863100560247
+      },
+      "checks": {
+        "trained_balance_policy": true,
+        "valid_duration": true,
+        "no_failure": true,
+        "upright": true,
+        "front_contact": true,
+        "forward_error": false,
+        "yaw_rate": false,
+        "heading_excursion": false,
+        "horizontal_displacement": false,
+        "horizontal_path": false
+      },
+      "failed_checks": [
+        "forward_error",
+        "yaw_rate",
+        "heading_excursion",
+        "horizontal_displacement",
+        "horizontal_path"
+      ],
+      "passed": false
+    },
+    "horizontal_path_length_m": 2.3593726201120493,
+    "max_horizontal_displacement_m": 0.7221778452554436,
+    "net_heading_change_rad": 5.791390948213595,
+    "max_heading_excursion_rad": 5.848791487220968,
+    "absolute_heading_travel_rad": 23.095225587717465,
     "joint_velocity_limit_mode": "project_velocity_and_position",
     "velocity_limit_applications": 304,
     "upright_fraction": 1.0,
@@ -61,6 +111,6 @@
       0.4974004503966436
     ],
     "finite": true,
-    "scope": "One fixed initial state; existing numerical velocity-limit approximation retained"
+    "scope": "One fixed initial state; existing numerical velocity-limit approximation retained; stationary-v2 acceptance fails"
   }
 }
