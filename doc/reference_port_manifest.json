@@ -36,7 +36,9 @@
   },
   "formula_changes": [
     "Per-environment height gates replace batch means",
-    "Right stance includes phase=0.5"
+    "Right stance includes phase=0.5",
+    "2026-10-31 user-approved: default_pos measures only the six front-leg joints in both command modes; weight -0.1 retained.",
+    "2026-10-31 user-approved: symmetric_joints compares only FL/FR with the existing hip sign correction and height gate; hind instantaneous symmetry removed, weight -0.1 retained."
   ],
   "adapter_changes": [
     "Compute height gate from current state before evaluating terms",
@@ -275,6 +277,18 @@
     "walk_entry_forward_mps": 0.2,
     "shared_reward_count": 27,
     "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "configured; no new training"
+    "status": "configured; no new training",
+    "front_only_regularizers": [
+      "default_pos",
+      "symmetric_joints"
+    ],
+    "hind_regularizers_retained": [
+      "default_hip_pos",
+      "dof_pos_limits",
+      "action_rate",
+      "torques",
+      "dof_acc"
+    ],
+    "clearance_change": "Deferred; existing two-foot clearance score and swing deficit unchanged."
   }
 }

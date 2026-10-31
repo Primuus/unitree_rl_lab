@@ -89,18 +89,58 @@ class ReferencePortTests(unittest.TestCase):
                 text = text.replace("self.cfg.rewards.tracking_sigma", "self.cfg.rewards.tracking_lin_vel_sigma")
             if name == "_reward_tracking_ang_vel":
                 text = text.replace("self.cfg.rewards.tracking_sigma", "self.cfg.rewards.tracking_ang_vel_sigma")
+            if name == "_reward_default_pos":
+                text = text.replace("self.dof_pos - self.descire_joint_pos",
+                                    "self.dof_pos[:, :6] - self.descire_joint_pos[:6]")
+            if name == "_reward_symmetric_joints":
+                text = "".join(line for line in text.splitlines(keepends=True)
+                               if "dof[:,3,0] *= -1" not in line)
+                text = text.replace(" + torch.sum(torch.abs(dof[:,2,:] - dof[:,3,:]),axis=1)", "")
             self.assertEqual(ast.dump(ast.parse(text).body[0]), ast.dump(methods[name]), name)
 
-    def test_all_23_rewards_match_upstream_on_same_state(self):
+    def test_unmodified_rewards_match_upstream_on_same_state(self):
         torch.manual_seed(7)
         original = sample(Oracle)
         current = ported()
         current.__dict__.update(copy.deepcopy(original.__dict__))
         current._reward_base_height()
         for name in names[2:]:
+            if name in ("_reward_default_pos", "_reward_symmetric_joints"):
+                continue  # Front-only adaptations are covered by behavioral tests below.
             expected = torch.as_tensor(getattr(original, name)())
             actual = torch.as_tensor(getattr(current, name)())
             torch.testing.assert_close(actual, expected, msg=name)
+
+    def test_hind_alternation_does_not_change_front_posture_or_symmetry_penalties(self):
+        obj = sample(ported)
+        obj.dof_pos = obj.descire_joint_pos.expand(8, -1).clone()
+        posture = obj._reward_default_pos().clone()
+        symmetry_cost = obj._reward_symmetric_joints().clone()
+        for command in (0., .075):
+            obj.commands.fill_(0.)
+            obj.commands[:, 0] = command
+            # Unequal hind thigh/calf excursions and mirrored hip deviations.
+            obj.dof_pos[:, 6:] += torch.tensor([.2, .7, -.5, -.1, -.3, .4])
+            torch.testing.assert_close(obj._reward_default_pos(), posture)
+            torch.testing.assert_close(obj._reward_symmetric_joints(), symmetry_cost)
+        # A front joint deviation must still change both penalties.
+        obj.dof_pos[:, 1] += .25
+        torch.testing.assert_close(obj._reward_default_pos(), torch.full((8,), .25))
+        self.assertFalse(torch.allclose(obj._reward_symmetric_joints(), symmetry_cost))
+        obj.rew_hanstand[0] = .69
+        self.assertEqual(obj._reward_symmetric_joints()[0].item(), 0.)
+
+    def test_front_symmetry_hip_sign_and_hind_hip_regularization_remain(self):
+        obj = sample(ported)
+        obj.dof_pos.zero_()
+        obj.dof_pos[:, :6] = torch.tensor([.2, .8, -1.5, -.2, .8, -1.5])
+        torch.testing.assert_close(obj._reward_symmetric_joints(), torch.zeros(8))
+        before = obj._reward_default_hip_pos().clone()
+        obj.dof_pos[:, 6] = .3
+        torch.testing.assert_close(obj._reward_default_hip_pos(), before + .3)
+        torch.testing.assert_close(obj._reward_symmetric_joints(), torch.zeros(8))
+        obj.dof_pos[:, 3] = .2
+        torch.testing.assert_close(obj._reward_symmetric_joints(), torch.full((8,), .4))
 
     def test_height_gate_is_independent_between_environments(self):
         obj = sample(ported)

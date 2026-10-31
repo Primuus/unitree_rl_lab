@@ -85,8 +85,8 @@ class ReferenceRewards:
         return  torch.sum(torch.square(self.last_actions - self.actions), dim=1)
 
     def _reward_default_pos(self):
-        # Penalize motion at zero commands
-        return torch.sum(torch.abs(self.dof_pos - self.descire_joint_pos), dim=1)
+        # Keep front-leg posture in both command modes; hind legs may alternate.
+        return torch.sum(torch.abs(self.dof_pos[:, :6] - self.descire_joint_pos[:6]), dim=1)
 
     def _reward_default_hip_pos(self):
         """
@@ -125,14 +125,13 @@ class ReferenceRewards:
         return (torch.sum(contact,dim=1)==1)*(self.rew_hanstand>0.70)
 
     def _reward_symmetric_joints(self):
-        # 左右关节对称（参考 go2_trot 的对称设置）：前后两对腿都参与
+        # Front-leg instantaneous symmetry only; hind legs alternate out of phase.
         # hip 左右正方向定义相反，比较前取反；thigh/calf 直接比较
         # dof 顺序 FL,FR,RL,RR：前对 FL-FR(0,1)，后对 RL-RR(2,3)
         dof = self.dof_pos.clone().view(self.num_envs, 4, int(self.num_dof/4))
         # Multiply the right side hips by -1 to match the sign of the left side:
         dof[:,1,0] *= -1   # FR hip
-        dof[:,3,0] *= -1   # RR hip
-        err = torch.sum(torch.abs(dof[:,0,:] - dof[:,1,:]),axis=1) + torch.sum(torch.abs(dof[:,2,:] - dof[:,3,:]),axis=1)
+        err = torch.sum(torch.abs(dof[:,0,:] - dof[:,1,:]),axis=1)
         return err*(self.rew_hanstand>0.70)
 
     def _reward_orientation_symmetry(self):
