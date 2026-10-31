@@ -14,6 +14,8 @@ parser.add_argument("--checkpoint", type=Path)
 parser.add_argument("--stage", choices=["balance", "walk"], default="walk")
 parser.add_argument("--gait_clock", choices=["auto", "always", "moving_only"], default="auto",
                     help="auto reads the checkpoint observation contract; overrides are diagnostic")
+parser.add_argument("--reward_profile", choices=["auto", "current"], default="auto",
+                    help="auto preserves the saved stage2 penalty profile; current scores with present rules")
 parser.add_argument("--num_envs", type=int, default=16)
 parser.add_argument("--steps", type=int, default=1000)
 parser.add_argument("--speed", type=float, default=0.2)
@@ -63,7 +65,9 @@ def main():
     if args.checkpoint:
         provenance = json.loads((args.checkpoint.parent/"params/provenance.json").read_text())
         profile = provenance.get("layout", {}).get("reward_profile")
-    configure_stage(cfg, "walk" if profile == "stage2_foot_support_v1" else args.stage)
+    saved_stage2 = profile in ("stage2_foot_support_v1", "stage2_foot_support_v2")
+    configure_stage(cfg, "walk" if saved_stage2 else args.stage,
+                    gait_penalties=args.reward_profile == "current" or profile != "stage2_foot_support_v1")
     # Evaluation mode selects commands; the checkpoint retains its support constraints.
     cfg.stage = args.stage
     if args.gait_clock != "auto":
@@ -126,7 +130,7 @@ def main():
             writer.close()
     result = metrics.result(policy is not None)
     result.update(task=args.task, stage=args.stage, checkpoint=str(args.checkpoint) if args.checkpoint else None,
-                  gait_clock_override=args.gait_clock,
+                  gait_clock_override=args.gait_clock, reward_profile_override=args.reward_profile,
                   checkpoint_sha256=hashlib.sha256(args.checkpoint.read_bytes()).hexdigest() if args.checkpoint else None,
                   mode="trained_policy" if policy else "zero_action_smoke", finite=True,
                   steps=args.steps, seconds_per_env=args.steps*raw.step_dt, num_envs=raw.num_envs,

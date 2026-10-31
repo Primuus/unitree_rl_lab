@@ -43,7 +43,8 @@
     "2026-10-31 user-approved: tracking_lin_vel, tracking_ang_vel, phase contact and feet_clearance use only -projected_gravity_x > 0.94; feet_clearance_deficit and zero-yaw penalty no longer require body height.",
     "2026-10-31 user-approved after rollback: contact and feet_clearance additionally multiply 0.3+0.7*clamp((height-0.43)/0.07,0,1). Velocity tracking and penalties unchanged; this is a new adaptation, not an upstream formula.",
     "2026-10-31 user-approved: feet_clearance sums scheduled swing-foot exponential scores times original-project V36 unload sigmoid((0.15-load)*20) and opposite support sigmoid((load-0.35)*12); normalized world-Z foot loads clamped to [0,2]. Existing sole height, width .01, orientation and height factors retained.",
-    "2026-10-31 user-approved stage2: non-hind-foot force >5N in four physics samples terminates; major positive rewards multiply legal contact, height progress (0.43 to 0.50m) and total positive hind-foot load / 0.8 body weights, clamped. Phase contact requires both feet to match. Swing positive feedback removes unload/opposite sigmoids; peak remains 0.06m. Balance and all 27 weights remain unchanged."
+    "2026-10-31 user-approved stage2: non-hind-foot force >5N in four physics samples terminates; major positive rewards multiply legal contact, height progress (0.43 to 0.50m) and total positive hind-foot load / 0.8 body weights, clamped. Phase contact requires both feet to match. Swing positive feedback removes unload/opposite sigmoids; peak remains 0.06m. Balance and all 27 weights remain unchanged.",
+    "2026-10-31 user-approved after measured reward audit: stage2 v2 raises feet_clearance_deficit from -1 to -3 and adds phase_contact_error=-2 times mean(actual_contact != phase_stance). Both penalties are ungated by height/orientation/support. Preserve 6cm peak and 20% double support. This added penalty is a user-approved adaptation, not a copied upstream term."
   ],
   "adapter_changes": [
     "Compute height gate from current state before evaluating terms",
@@ -284,9 +285,8 @@
     "resampling_s": 10.0,
     "automatic_speed_curriculum": false,
     "walk_entry_forward_mps": 0.05,
-    "shared_reward_count": 27,
     "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "Stage2 continuation authorized; launch/evaluation records under logs/launches.",
+    "status": "500-update stage2 continuation finished at model_6489. Gait penalties strengthened after audit; no further training started.",
     "front_only_regularizers": [
       "default_pos",
       "symmetric_joints"
@@ -299,7 +299,7 @@
       "dof_acc"
     ],
     "clearance_change": "Stage2 dense swing score with support quality; legacy balance retains V36 load gates.",
-    "selected_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_04-13-39_balance_balance_clearance10_continue500/model_5990.pt",
+    "selected_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_13-16-56_walk_stage2_foot_support_continue500/model_6489.pt",
     "rejected_runs": [
       {
         "run": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_11-05-14_balance_swing_load_continue750",
@@ -310,7 +310,11 @@
     ],
     "additional_updates": 500,
     "num_envs": 4096,
-    "save_interval": 50
+    "save_interval": 50,
+    "reward_counts": {
+      "balance": 27,
+      "walk": 28
+    }
   },
   "height_reward_and_task_gates": {
     "height_target_m": 0.52,
@@ -353,7 +357,7 @@
     "record": "doc/回退至参考奖励对照前实现.md"
   },
   "stage2_support": {
-    "profile": "stage2_foot_support_v1",
+    "profile": "stage2_foot_support_v2",
     "scope": "walk, retained during zero-command evaluation of this profile",
     "height_low_m": 0.43,
     "height_full_m": 0.5,
@@ -383,5 +387,18 @@
     "peak_height_m": 0.06,
     "no_unload_sigmoid": true,
     "record": "doc/Stage2_足端支撑与长训策略续训500轮.md"
+  },
+  "stage2_gait_penalties": {
+    "profile": "stage2_foot_support_v2",
+    "reward_count": 28,
+    "feet_clearance_deficit_weight": -3.0,
+    "phase_contact_error_weight": -2.0,
+    "phase_contact_error_formula": "mean((rear_Fz > 1N) != desired_stance)",
+    "gated_by_height_orientation_or_load": false,
+    "peak_height_m": 0.06,
+    "double_support_fraction": 0.2,
+    "unchanged_balance_reward_count": 27,
+    "training_started": false,
+    "record": "doc/Stage2_奖励贡献审计与步态惩罚加强.md"
   }
 }

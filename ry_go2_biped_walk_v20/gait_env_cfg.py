@@ -86,12 +86,13 @@ class ReferenceTerminationsCfg:
         "sensor_cfg": SceneEntityCfg("contact_forces", body_names="base"), "threshold": 1.0})
 
 
-def configure_stage(cfg, stage):
+def configure_stage(cfg, stage, gait_penalties=True):
     if stage not in ("balance", "walk"):
         raise ValueError(f"Unknown stage: {stage}")
     cfg.stage = stage
     cfg.rewards = ReferenceRewardsCfg()
     cfg.stage2_support = stage == "walk"
+    cfg.stage2_gait_penalties = cfg.stage2_support and gait_penalties
     cfg.terminations = ReferenceTerminationsCfg()
     cfg.scene.contact_forces.history_length = 4 if cfg.stage2_support else 3
     cfg.scene.contact_forces.update_period = 0.0
@@ -107,6 +108,10 @@ def configure_stage(cfg, stage):
     cfg.rewards.feet_clearance.weight = 1.0
     cfg.rewards.feet_clearance_deficit = RewTerm(
         func=gm.balance_step_reward, weight=-1.0, params={"name": "feet_clearance_deficit"})
+    if cfg.stage2_gait_penalties:
+        cfg.rewards.feet_clearance_deficit.weight = -3.0
+        cfg.rewards.phase_contact_error = RewTerm(
+            func=gm.balance_step_reward, weight=-2.0, params={"name": "phase_contact_error"})
     cfg.rewards.foot_slip = RewTerm(
         func=wm.feet_slide_l2, weight=-0.5,
         params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS})
@@ -127,6 +132,7 @@ def configure_stage(cfg, stage):
 class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     stage: str = "balance"
     stage2_support: bool = False
+    stage2_gait_penalties: bool = False
     nonfoot_contact_threshold: float = 5.0
     support_height_low: float = .43
     support_height_full: float = .50

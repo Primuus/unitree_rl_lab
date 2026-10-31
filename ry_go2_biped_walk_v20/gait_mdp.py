@@ -9,7 +9,7 @@ from .reference_rewards import ReferenceRewards
 from .robot_cfg import JOINT_NAMES, FOOT_NAMES, ROBOT_WEIGHT
 from .stepping_rewards import (
     step_targets, clearance_score, clearance_deficit, contact_score, body_height_factor,
-    illegal_support, foot_support_quality, pair_contact_score, swing_height_score)
+    illegal_support, foot_support_quality, pair_contact_score, swing_height_score, phase_contact_error)
 
 
 class RewardState(ReferenceRewards):
@@ -126,6 +126,9 @@ def balance_step_reward(env, name):
     s = state(env)
     target, stance = step_targets(s._get_phase(), env.cfg.balance_step_height,
                                   env.cfg.balance_double_support_fraction)
+    if name == "phase_contact_error":
+        contact = s.contact_forces[:, s.contact_foot_indices, 2] > 1.0
+        return phase_contact_error(contact, stance)
     if name in ("feet_clearance", "feet_clearance_deficit"):
         data = s.robot.data
         ids = s.contact_foot_indices
@@ -206,7 +209,9 @@ def validate_layout(env):
     expected = {k: v for k, v in REFERENCE["reward_scales"].items() if v != 0}
     expected["contact"] = 0.9
     expected["feet_clearance"] = 1.0
-    expected["feet_clearance_deficit"] = -1.0
+    expected["feet_clearance_deficit"] = -3.0 if env.cfg.stage2_gait_penalties else -1.0
+    if env.cfg.stage2_gait_penalties:
+        expected["phase_contact_error"] = -2.0
     expected["foot_slip"] = -0.5
     expected["tracking_ang_vel_zero"] = -0.2
     expected["heading_alignment"] = 1.5
@@ -214,7 +219,13 @@ def validate_layout(env):
               for name in env.reward_manager.active_terms}
     if active != expected:
         raise ValueError(f"Reward scales differ from reference/stage: {active}, {expected}")
-    return {"reward_profile": "stage2_foot_support_v1" if env.cfg.stage2_support else "balance_27",
+    profile = ("stage2_foot_support_v2" if env.cfg.stage2_gait_penalties else "stage2_foot_support_v1") if env.cfg.stage2_support else "balance_27"
+    return {"reward_profile": profile,
+            "gait_penalties": {"enabled": env.cfg.stage2_gait_penalties,
+                "clearance_deficit_weight": active["feet_clearance_deficit"],
+                "phase_contact_error_weight": active.get("phase_contact_error", 0.),
+                "phase_contact_error_formula": "mean(actual_contact != phase_stance)",
+                "contact_threshold_n": 1.0, "height_or_upright_gate": False},
             "stage2_support": {"enabled": env.cfg.stage2_support,
                 "nonfoot_threshold_n": env.cfg.nonfoot_contact_threshold,
                 "contact_history_samples": env.scene["contact_forces"].cfg.history_length,
@@ -251,7 +262,7 @@ def validate_layout(env):
                     "min_factor": 0.0 if env.cfg.stage2_support else env.cfg.step_reward_height_min_factor,
                     "formula": "clamp((height-low)/(full-low),0,1)*clamp(sum(rear_loads)/0.8,0,1)*legal_contact" if env.cfg.stage2_support else "min_factor + (1-min_factor)*clamp((height-low)/(full-low),0,1)",
                 },
-                "ungated_penalties": ["feet_clearance_deficit"],
+                "ungated_penalties": ["feet_clearance_deficit", "phase_contact_error"] if env.cfg.stage2_gait_penalties else ["feet_clearance_deficit"],
                 "zero_yaw_gate": "abs(command_yaw) < 0.1; no height gate",
                 "legacy_height_score_terms": ["ang_xz", "symmetric_joints", "default_pos_reward"],
             },

@@ -244,10 +244,14 @@ class ReferencePortTests(unittest.TestCase):
             self.assertIs(cfg.rewards.heading_alignment.func, namespace['gm'].balance_heading_alignment)
             self.assertEqual(cfg.rewards.heading_alignment.params['std'], .6)
             self.assertIs(cfg.rewards.heading_alignment.params['sensor_cfg'], namespace['SCANNER'])
-            self.assertEqual(cfg.rewards.feet_clearance_deficit.weight, -1.)
+            self.assertEqual(cfg.rewards.feet_clearance_deficit.weight, -3. if stage == "walk" else -1.)
             self.assertEqual(cfg.rewards.feet_clearance_deficit.params, {'name': 'feet_clearance_deficit'})
             self.assertIs(cfg.rewards.feet_clearance_deficit.func, namespace['gm'].balance_step_reward)
-            self.assertEqual(len(vars(cfg.rewards)), 27)
+            self.assertEqual(len(vars(cfg.rewards)), 28 if stage == "walk" else 27)
+            self.assertEqual(cfg.stage2_gait_penalties, stage == "walk")
+            if stage == "walk":
+                self.assertEqual(cfg.rewards.phase_contact_error.weight, -2.)
+                self.assertEqual(cfg.rewards.phase_contact_error.params, {"name": "phase_contact_error"})
             command = cfg.commands.base_velocity
             self.assertEqual(command.ranges.lin_vel_x, (.05, .10) if stage == "balance" else (.05, .05))
             self.assertEqual(command.rel_standing_envs, .5 if stage == "balance" else 0.)
@@ -259,6 +263,13 @@ class ReferencePortTests(unittest.TestCase):
             self.assertEqual(cfg.stage2_support, stage == "walk")
             self.assertEqual(cfg.scene.contact_forces.history_length, 4 if stage == "walk" else 3)
             self.assertEqual(hasattr(cfg.terminations, "nonfoot_contact"), stage == "walk")
+
+        # Replaying a v1 checkpoint retains its 27 original rewards.
+        namespace["configure_stage"](cfg, "walk", gait_penalties=False)
+        self.assertFalse(cfg.stage2_gait_penalties)
+        self.assertEqual(cfg.rewards.feet_clearance_deficit.weight, -1.)
+        self.assertEqual(len(vars(cfg.rewards)), 27)
+        self.assertFalse(hasattr(cfg.rewards, "phase_contact_error"))
 
     def test_zero_yaw_penalty_world_axis_command_and_no_height_gate(self):
         path = ROOT / 'ry_go2_biped_walk_v20/gait_mdp.py'
@@ -421,6 +432,36 @@ class ReferencePortTests(unittest.TestCase):
         self.assertTrue((lifted[:2] > low[:2]).all())
         torch.testing.assert_close(stepping.swing_height_score(target, target, ~stance),
                                    torch.tensor([1., 1., 0.]))
+
+    def test_phase_error_penalizes_drag_wrong_side_and_flight_not_valid_double_support(self):
+        _, stance = stepping.step_targets(torch.tensor([.25, .75, 0.]))
+        torch.testing.assert_close(stepping.phase_contact_error(stance, stance), torch.zeros(3))
+        torch.testing.assert_close(stepping.phase_contact_error(torch.ones_like(stance), stance),
+                                   torch.tensor([.5,.5,0.]))
+        torch.testing.assert_close(stepping.phase_contact_error(~stance, stance), torch.ones(3))
+        torch.testing.assert_close(stepping.phase_contact_error(torch.zeros_like(stance), stance),
+                                   torch.tensor([.5,.5,1.]))
+        torch.testing.assert_close(stepping.phase_contact_error(stance.flip(-1), stance),
+                                   stepping.phase_contact_error(stance, stance.flip(-1)))
+        phase = (torch.arange(80)+.5)/80
+        target, stance = stepping.step_targets(phase)
+        deficit = stepping.clearance_deficit(torch.zeros_like(target),target,~stance)
+        contact_error = stepping.phase_contact_error(torch.ones_like(stance),stance)
+        self.assertAlmostEqual(float((-3*deficit-2*contact_error).mean()), -2., places=6)
+
+    def test_phase_error_survives_low_height_and_missing_support(self):
+        path = ROOT/'ry_go2_biped_walk_v20/gait_mdp.py'
+        fn = next(n for n in ast.parse(path.read_text()).body
+                  if isinstance(n, ast.FunctionDef) and n.name == 'balance_step_reward')
+        state = SimpleNamespace(_get_phase=lambda:torch.tensor([.25,.25]),
+            contact_foot_indices=[0,1],contact_forces=torch.tensor([
+                [[0.,0.,10.],[0.,0.,10.]],[[0.,0.,0.],[0.,0.,0.]]]))
+        # No height, support quality or orientation fields: the penalty must not depend on them.
+        ns = {'state':lambda _:state, 'step_targets':stepping.step_targets,
+              'phase_contact_error':stepping.phase_contact_error}
+        exec(compile(ast.Module(body=[fn],type_ignores=[]),str(path),'exec'),ns)
+        env = SimpleNamespace(cfg=SimpleNamespace(balance_step_height=.06,balance_double_support_fraction=.2))
+        torch.testing.assert_close(ns['balance_step_reward'](env,'phase_contact_error'),torch.tensor([.5,.5]))
 
     def test_swing_clearance_requires_load_transfer_and_ignores_support_height(self):
         target = torch.tensor([[.06, 0.]]).expand(5, 2)

@@ -59,3 +59,8 @@ def pair_contact_score(contact, stance):
 def swing_height_score(height, target, swing, width=.01):
     """Dense swing height feedback without requiring unloading first."""
     return (torch.exp(-(height-target).abs()/width)*swing).sum(-1)
+
+
+def phase_contact_error(contact, stance):
+    """Per-foot mismatch; preserves scheduled double support and penalizes wrong-side swing."""
+    return (contact != stance).float().mean(-1)
