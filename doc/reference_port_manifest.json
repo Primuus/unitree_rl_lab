@@ -286,7 +286,7 @@
     "automatic_speed_curriculum": false,
     "walk_entry_forward_mps": 0.05,
     "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "User authorized 500 more updates from model_6489 with stage2 v2; coordinator logs/launches/*stage2_gait_penalty_continue500.json records actual progress.",
+    "status": "The 500-update stage2 v2 continuation completed at model_6988 and three evaluations finished. No sustained alternating gait; no further training started.",
     "front_only_regularizers": [
       "default_pos",
       "symmetric_joints"
@@ -315,7 +315,9 @@
       "balance": 27,
       "walk": 28
     },
-    "expected_final_iteration": 6988
+    "expected_final_iteration": 6988,
+    "latest_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_14-00-27_walk_stage2_gait_penalty_continue500/model_6988.pt",
+    "evaluation_record": "doc/Stage2_步态惩罚加强后500轮评估.md"
   },
   "height_reward_and_task_gates": {
     "height_target_m": 0.52,
