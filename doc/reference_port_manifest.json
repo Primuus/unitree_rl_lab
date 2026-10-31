@@ -285,7 +285,7 @@
     "walk_entry_forward_mps": 0.2,
     "shared_reward_count": 27,
     "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "User authorized 750 continuation updates from model_2497 with smooth height factor and swing-only load-gated clearance, followed by three fixed-command evaluations.",
+    "status": "The 750-update swing-load continuation completed but was rejected by the user. Default resume/export/evaluation baseline is model_2497; reward code retained; no new training.",
     "front_only_regularizers": [
       "default_pos",
       "symmetric_joints"
@@ -297,7 +297,16 @@
       "torques",
       "dof_acc"
     ],
-    "clearance_change": "Swing-only score with original-project V36 unload/support gates; weight 1.0 retained. No event reward or PD change."
+    "clearance_change": "Swing-only score with original-project V36 unload/support gates; weight 1.0 retained. No event reward or PD change.",
+    "selected_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_09-53-03_balance_height_gate_continue500/model_2497.pt",
+    "rejected_runs": [
+      {
+        "run": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_11-05-14_balance_swing_load_continue750",
+        "scope": "all checkpoints and exported policies",
+        "reason": "User rejected the 750-update training results after evaluation",
+        "artifacts_retained": true
+      }
+    ]
   },
   "height_reward_and_task_gates": {
     "height_target_m": 0.52,
