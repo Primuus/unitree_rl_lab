@@ -130,7 +130,7 @@ def joint_position_rel(env):
 
 
 def gait_clock(env, period=1.6):
-    if env.cfg.stage == "balance" and env.cfg.balance_gait_clock == "always":
+    if env.cfg.balance_gait_clock == "always":
         phase = env.episode_length_buf.to(torch.float32) * env.step_dt * (2 * torch.pi / period)
         return torch.stack((torch.sin(phase), torch.cos(phase)), dim=-1)
     return wm.gait_clock(env, period=period)
@@ -165,23 +165,30 @@ def validate_layout(env):
     mirror_data(env, actions=torch.zeros(env.num_envs, 12, device=env.device))
     s = state(env)
     expected = {k: v for k, v in REFERENCE["reward_scales"].items() if v != 0}
-    if env.cfg.stage == "balance":
-        expected["contact"] = 0.9
-        expected["feet_clearance"] = 1.0
-        expected["feet_clearance_deficit"] = -1.0
-        expected["foot_slip"] = -0.5
-        expected["tracking_ang_vel_zero"] = -0.2
-        expected["heading_alignment"] = 1.5
+    expected["contact"] = 0.9
+    expected["feet_clearance"] = 1.0
+    expected["feet_clearance_deficit"] = -1.0
+    expected["foot_slip"] = -0.5
+    expected["tracking_ang_vel_zero"] = -0.2
+    expected["heading_alignment"] = 1.5
     active = {name: env.reward_manager.get_term_cfg(name).weight
               for name in env.reward_manager.active_terms}
     if active != expected:
         raise ValueError(f"Reward scales differ from reference/stage: {active}, {expected}")
     return {"action_names": names, "native_joint_names": list(env.scene["robot"].joint_names),
             "observation_dims": dims, "reward_scales": active,
+            "command_sampling": {
+                "forward_range_mps": env.cfg.commands.base_velocity.ranges.lin_vel_x,
+                "zero_probability": env.cfg.commands.base_velocity.rel_standing_envs,
+                "resampling_time_s": env.cfg.commands.base_velocity.resampling_time_range,
+                "lateral_range_mps": env.cfg.commands.base_velocity.ranges.lin_vel_y,
+                "yaw_range_radps": env.cfg.commands.base_velocity.ranges.ang_vel_z,
+                "heading_command": env.cfg.commands.base_velocity.heading_command,
+            },
             "front_foot_ids": s.feet_name_reward_indices, "hind_foot_ids": s.contact_foot_indices,
             "tracking_lin_vel_sigma": s.cfg.rewards.tracking_lin_vel_sigma,
             "tracking_ang_vel_sigma": s.cfg.rewards.tracking_ang_vel_sigma,
-            "gait_clock": {"mode": env.cfg.balance_gait_clock if env.cfg.stage == "balance" else "moving_only",
+            "gait_clock": {"mode": env.cfg.balance_gait_clock,
                            "period_s": s.cfg.rewards.cycle_time},
             "balance_yaw_constraints": {
                 "zero_yaw_axis": "world_z", "zero_yaw_weight": -0.2,
@@ -190,8 +197,8 @@ def validate_layout(env):
                 "heading_weight": active["heading_alignment"],
                 "heading_std_rad": env.reward_manager.get_term_cfg("heading_alignment").params["std"],
                 "heading_gate": "upright_score(std=0.7) * clamp((height-0.35)/0.15,0,1)",
-            } if env.cfg.stage == "balance" else None,
+            },
             "balance_stepping": {"peak_height": env.cfg.balance_step_height,
                                  "double_support_fraction": env.cfg.balance_double_support_fraction,
                                  "clearance_width": env.cfg.balance_clearance_width,
-                                 "cycle_time": s.cfg.rewards.cycle_time} if env.cfg.stage == "balance" else None}
+                                 "cycle_time": s.cfg.rewards.cycle_time}}

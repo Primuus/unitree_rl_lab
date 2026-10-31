@@ -60,17 +60,18 @@ def main():
     cfg = parse_env_cfg(args.task, device=args.device, num_envs=args.num_envs,
                         entry_point_key="play_env_cfg_entry_point")
     configure_stage(cfg, args.stage)
-    if args.stage == "balance":
-        if args.gait_clock != "auto":
-            cfg.balance_gait_clock = args.gait_clock
-        elif args.checkpoint:
-            clock = read_gait_clock(args.checkpoint.parent/"params/provenance.json")
-            cfg.balance_gait_clock = clock["mode"]
-            if clock["period_s"] != cfg.observations.policy.gait_phase.params["period"]:
-                raise ValueError("Checkpoint gait period differs from current evaluation configuration")
+    if args.gait_clock != "auto":
+        cfg.balance_gait_clock = args.gait_clock
+    elif args.checkpoint:
+        clock = read_gait_clock(args.checkpoint.parent/"params/provenance.json")
+        cfg.balance_gait_clock = clock["mode"]
+        if clock["period_s"] != cfg.observations.policy.gait_phase.params["period"]:
+            raise ValueError("Checkpoint gait period differs from current evaluation configuration")
     cfg.seed = args.seed
     cfg.episode_length_s = max(cfg.episode_length_s, args.steps * cfg.sim.dt * cfg.decimation + 1)
     cfg.commands.base_velocity.ranges.lin_vel_x = (args.speed, args.speed) if args.stage == "walk" else (0., 0.)
+    # Evaluate each command separately; never inherit the training mixture.
+    cfg.commands.base_velocity.rel_standing_envs = 1.0 if args.stage == "balance" else 0.0
     cfg.events.reset_root.params["yaw_range"] = (0.0, 0.0)
     if args.train_friction:
         training = parse_env_cfg(args.task, device=args.device, num_envs=args.num_envs)

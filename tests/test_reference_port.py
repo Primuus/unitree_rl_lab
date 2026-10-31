@@ -149,7 +149,7 @@ class ReferencePortTests(unittest.TestCase):
         obj._reward_base_height()
         self.assertEqual(obj._reward_tracking_ang_vel()[-1].item(), 0.)
 
-    def test_stage_switch_restores_tracking_widths(self):
+    def test_stage_switch_preserves_shared_rewards_and_changes_command_distribution(self):
         tree = ast.parse((ROOT / "ry_go2_biped_walk_v20/gait_env_cfg.py").read_text())
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "configure_stage")
         namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": lambda: SimpleNamespace(
@@ -160,37 +160,36 @@ class ReferencePortTests(unittest.TestCase):
                      "REAR_BODIES": object(), "REAR_CONTACTS": object(), "SCANNER": object()}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<configure_stage>", "exec"), namespace)
         cfg = SimpleNamespace(commands=SimpleNamespace(base_velocity=SimpleNamespace(ranges=SimpleNamespace())))
-        for stage, linear, angular in [("balance", .0025, .04), ("walk", .25, .25), ("balance", .0025, .04)]:
+        for stage, linear, angular in [("balance", .0025, .04), ("walk", .0025, .04), ("balance", .0025, .04)]:
             namespace["configure_stage"](cfg, stage)
             self.assertEqual((cfg.tracking_lin_vel_sigma, cfg.tracking_ang_vel_sigma), (linear, angular))
-            if stage == "balance":
-                for name in ("contact", "feet_clearance"):
-                    term = getattr(cfg.rewards, name)
-                    self.assertIs(term.func, namespace["gm"].balance_step_reward)
-                    self.assertEqual(term.weight, .9 if name == "contact" else 1.0)
-                term = cfg.rewards.foot_slip
-                self.assertEqual(term.weight, -0.5)
-                self.assertIs(term.func, namespace["wm"].feet_slide_l2)
-                self.assertIs(term.params["asset_cfg"], namespace["REAR_BODIES"])
-                self.assertIs(term.params["sensor_cfg"], namespace["REAR_CONTACTS"])
-                self.assertEqual(cfg.rewards.tracking_ang_vel_zero.weight, -.2)
-                self.assertIs(cfg.rewards.tracking_ang_vel_zero.func, namespace['gm'].balance_zero_yaw_l2)
-                self.assertEqual(cfg.rewards.heading_alignment.weight, 1.5)
-                self.assertIs(cfg.rewards.heading_alignment.func, namespace['gm'].balance_heading_alignment)
-                self.assertEqual(cfg.rewards.heading_alignment.params['std'], .6)
-                self.assertIs(cfg.rewards.heading_alignment.params['sensor_cfg'], namespace['SCANNER'])
-                self.assertEqual(cfg.rewards.feet_clearance_deficit.weight, -1.)
-                self.assertEqual(cfg.rewards.feet_clearance_deficit.params, {'name': 'feet_clearance_deficit'})
-                self.assertIs(cfg.rewards.feet_clearance_deficit.func, namespace['gm'].balance_step_reward)
-                self.assertEqual(len(vars(cfg.rewards)), 27)
-            else:
-                self.assertFalse(hasattr(cfg.rewards, "foot_slip"))
-                self.assertFalse(hasattr(cfg.rewards, "tracking_ang_vel_zero"))
-                self.assertFalse(hasattr(cfg.rewards, "heading_alignment"))
-                self.assertFalse(hasattr(cfg.rewards, "feet_clearance_deficit"))
-                self.assertEqual(len(vars(cfg.rewards)), 23)
-                self.assertEqual(cfg.rewards.contact.weight, .3)
-                self.assertEqual(cfg.rewards.feet_clearance.weight, .4)
+            for name in ("contact", "feet_clearance"):
+                term = getattr(cfg.rewards, name)
+                self.assertIs(term.func, namespace["gm"].balance_step_reward)
+                self.assertEqual(term.weight, .9 if name == "contact" else 1.0)
+            term = cfg.rewards.foot_slip
+            self.assertEqual(term.weight, -0.5)
+            self.assertIs(term.func, namespace["wm"].feet_slide_l2)
+            self.assertIs(term.params["asset_cfg"], namespace["REAR_BODIES"])
+            self.assertIs(term.params["sensor_cfg"], namespace["REAR_CONTACTS"])
+            self.assertEqual(cfg.rewards.tracking_ang_vel_zero.weight, -.2)
+            self.assertIs(cfg.rewards.tracking_ang_vel_zero.func, namespace['gm'].balance_zero_yaw_l2)
+            self.assertEqual(cfg.rewards.heading_alignment.weight, 1.5)
+            self.assertIs(cfg.rewards.heading_alignment.func, namespace['gm'].balance_heading_alignment)
+            self.assertEqual(cfg.rewards.heading_alignment.params['std'], .6)
+            self.assertIs(cfg.rewards.heading_alignment.params['sensor_cfg'], namespace['SCANNER'])
+            self.assertEqual(cfg.rewards.feet_clearance_deficit.weight, -1.)
+            self.assertEqual(cfg.rewards.feet_clearance_deficit.params, {'name': 'feet_clearance_deficit'})
+            self.assertIs(cfg.rewards.feet_clearance_deficit.func, namespace['gm'].balance_step_reward)
+            self.assertEqual(len(vars(cfg.rewards)), 27)
+            command = cfg.commands.base_velocity
+            self.assertEqual(command.ranges.lin_vel_x, (.05, .10) if stage == "balance" else (.2, .2))
+            self.assertEqual(command.rel_standing_envs, .5 if stage == "balance" else 0.)
+            self.assertEqual(command.ranges.lin_vel_y, (0., 0.))
+            self.assertEqual(command.ranges.ang_vel_z, (0., 0.))
+            self.assertFalse(command.heading_command)
+            self.assertEqual(command.resampling_time_range, (10., 10.))
+            self.assertEqual(cfg.balance_gait_clock, "always")
 
     def test_zero_yaw_penalty_world_axis_command_and_per_environment_gate(self):
         path = ROOT / 'ry_go2_biped_walk_v20/gait_mdp.py'
@@ -314,7 +313,7 @@ class ReferencePortTests(unittest.TestCase):
                                  (1.+torch.exp(torch.tensor(-3.)))/2,0.])
         torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance'),expected)
 
-    def test_balance_clock_exposes_target_phase_and_keeps_legacy_walk_gate(self):
+    def test_shared_clock_survives_stop_start_and_supports_legacy_replay(self):
         import math
         original_path = ROOT/'ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py'
         nodes = [n for n in ast.parse(original_path.read_text()).body
@@ -345,9 +344,22 @@ class ReferencePortTests(unittest.TestCase):
         env.cfg.balance_gait_clock = 'moving_only'
         torch.testing.assert_close(namespace['gait_clock'](env),torch.zeros(4,2))
         env.cfg.stage = 'walk'; env.cfg.balance_gait_clock = 'always'
-        torch.testing.assert_close(namespace['gait_clock'](env),torch.zeros(4,2))
+        torch.testing.assert_close(namespace['gait_clock'](env),torch.tensor([[0.,1.]]).expand(4,2))
         command[:,0] = .2
         torch.testing.assert_close(namespace['gait_clock'](env),torch.tensor([[0.,1.]]).expand(4,2))
+
+    def test_tracking_uses_each_environment_command_in_mixed_batch(self):
+        obj = sample(ported)
+        obj.cfg.rewards.tracking_lin_vel_sigma = .0025
+        obj.commands.zero_()
+        obj.commands[:, 0] = torch.tensor([0., .05, .075, .1, 0., .05, .075, .1])
+        obj.base_lin_vel.zero_()
+        obj.base_lin_vel[:, 2] = -obj.commands[:, 0]
+        torch.testing.assert_close(obj._reward_tracking_lin_vel(), torch.ones(8))
+        obj.base_lin_vel.zero_()
+        expected = torch.exp(-obj.commands[:, 0].square() / .0025)
+        torch.testing.assert_close(obj._reward_tracking_lin_vel(), expected)
+        self.assertLess(expected[3].item(), .02)
 
     def test_reflection_round_trip_and_native_joint_permutation(self):
         joints = symmetry.ACTION_NAMES[::3] + symmetry.ACTION_NAMES[1::3] + symmetry.ACTION_NAMES[2::3]

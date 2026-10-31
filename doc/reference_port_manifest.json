@@ -55,7 +55,8 @@
     "User explicitly raises balance phase-contact weight from 0.3 to 0.9; clearance remains 0.4, walk contact remains 0.3",
     "Subsequent user request raises only balance feet_clearance from 0.4 to 1.0; contact remains 0.9, walk clearance remains 0.4",
     "User-approved balance additions: tracking_ang_vel_zero=-0.2 from reference Leggedstand (world-Z adaptation), heading_alignment=+1.5 with std=0.6 from recorded original V7/V20 formula; 26 balance terms, walk unchanged. Heading target fixed world +X; observations unchanged.",
-    "User-approved balance phase clock always visible to Actor/Critic; adds feet_clearance_deficit=-1.0 for scheduled swing foot. Balance now 27 terms; walk remains 23 and command-gated. New provenance records gait_clock; legacy replay restores moving_only."
+    "User-approved balance phase clock always visible to Actor/Critic; adds feet_clearance_deficit=-1.0 for scheduled swing foot. Balance now 27 terms; walk remains 23 and command-gated. New provenance records gait_clock; legacy replay restores moving_only.",
+    "2026-10-31 supersedes prior stage-specific settings: balance samples 50% zero and 50% uniform forward 0.05..0.10 m/s every 10 s; walk keeps fixed 0.2 m/s. Both share the existing 27 balance rewards, always-visible phase and tracking denominators 0.0025/0.04. Evaluation forces separate fixed commands; no PPO updates in this change."
   ],
   "policy_source": {
     "init_noise_std": 1.0,
@@ -156,13 +157,13 @@
       "angular": 0.04
     },
     "walk": {
-      "linear": 0.25,
-      "angular": 0.25
+      "linear": 0.0025,
+      "angular": 0.04
     }
   },
   "original_project_reward_additions": {
     "foot_slip": {
-      "stage": "balance",
+      "stage": "balance and walk",
       "weight": -0.5,
       "original_source": "/workspace/unitree_rl_lab/source/unitree_rl_lab/unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py:feet_slide_l2",
       "runtime_source": "ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py:feet_slide_l2",
@@ -203,7 +204,7 @@
       0,
       0
     ],
-    "notes": "User-approved small-step adaptation, not unchanged upstream formulas. User subsequently sets balance contact=0.9 and feet_clearance=1.0; original walk rewards preserved. After round8 evaluation, user sets peak height to 0.06 m; model_5990 was trained at 0.02 m, and the 0.06 m configuration has not been trained.",
+    "notes": "User-approved phase-target adaptation shared by balance and walk. Peak foot-sole clearance 0.06 m; contact=0.9, clearance=1.0, deficit=-1.0. Prior runs trained these balance parameters; mixed commands are newly configured and not yet trained.",
     "active_weights": {
       "feet_clearance": 1.0,
       "contact": 0.9,
@@ -238,12 +239,12 @@
       "heading_axis": "horizontal projection of body -Z",
       "target_observability": "fixed world +X; existing absolute heading sin/cos at Actor 50:52; no reset-specific hidden target"
     },
-    "stage": "balance",
-    "runtime_validation": "Local 21 reward/metric tests passed; server synchronization and Isaac runtime validation pending; not trained"
+    "stage": "balance and walk",
+    "runtime_validation": "Shared across stages; current validation is recorded in doc/零速度踏步与低速前进混合训练.md"
   },
   "phase_observation": {
     "balance": "always",
-    "walk": "moving_only",
+    "walk": "always",
     "period_s": 1.6,
     "actor_slice": [
       12,
@@ -259,5 +260,21 @@
     "resume_training": "New observations apply when resuming old weights; old policy needs training to adapt",
     "mujoco": "config gait_clock_mode=auto reads selected policy provenance; reset starts phase zero",
     "symmetry": "Existing sin/cos sign flip shifts phase by half a cycle and swaps hind-foot targets"
+  },
+  "current_training": {
+    "stage": "balance",
+    "zero_probability": 0.5,
+    "forward_range_mps": [
+      0.05,
+      0.1
+    ],
+    "lateral_mps": 0.0,
+    "yaw_radps": 0.0,
+    "resampling_s": 10.0,
+    "automatic_speed_curriculum": false,
+    "walk_entry_forward_mps": 0.2,
+    "shared_reward_count": 27,
+    "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
+    "status": "configured; no new training"
   }
 }
