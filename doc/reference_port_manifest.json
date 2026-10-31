@@ -34,34 +34,6 @@
     "dof_pos_limits": -2.0,
     "alive": 1.0
   },
-  "formula_changes": [
-    "Per-environment height gates replace batch means",
-    "Right stance includes phase=0.5",
-    "2026-10-31 user-approved: default_pos measures only the six front-leg joints in both command modes; weight -0.1 retained.",
-    "2026-10-31 user-approved: symmetric_joints compares only FL/FR with the existing hip sign correction and height gate; hind instantaneous symmetry removed, weight -0.1 retained.",
-    "2026-10-31 user-approved: base_height = exp(-abs(height-0.52)/0.05), weight 1.5 retained; legacy exp(-5*abs(height-0.52)) score remains separate for untouched regularizers.",
-    "2026-10-31 user-approved: tracking_lin_vel, tracking_ang_vel, phase contact and feet_clearance use only -projected_gravity_x > 0.94; feet_clearance_deficit and zero-yaw penalty no longer require body height."
-  ],
-  "adapter_changes": [
-    "Compute height gate from current state before evaluating terms",
-    "Reorder simulator joints and bodies by explicit upstream names",
-    "Reset previous control-step joint velocity per environment",
-    "Expand scalar alive reward to one value per environment"
-  ],
-  "configuration_changes": [
-    "Upright initialization from upstream desired angles, rather than quadruped reset",
-    "Existing 56/155 observation layout retained with 12 joints",
-    "Balance restores contact and feet_clearance with user-approved small-step adaptations; walk uses all 23 upstream terms",
-    "Fixed commands: balance=(0,0,0), walk=(0.2,0,0); plane terrain",
-    "Only material friction/restitution randomization is ported; other upstream domain randomization is not implemented",
-    "User-approved balance tracking denominators: linear=0.0025, angular=0.04; walk linear and angular remain 0.25; tracking reward weights unchanged",
-    "User-approved balance-only foot_slip=-0.5 inherited from original /workspace/unitree_rl_lab; 24 balance rewards, 23 walk rewards; reference weights retained except user-approved balance contact and feet_clearance overrides",
-    "User explicitly raises balance phase-contact weight from 0.3 to 0.9; clearance remains 0.4, walk contact remains 0.3",
-    "Subsequent user request raises only balance feet_clearance from 0.4 to 1.0; contact remains 0.9, walk clearance remains 0.4",
-    "User-approved balance additions: tracking_ang_vel_zero=-0.2 from reference Leggedstand (world-Z adaptation), heading_alignment=+1.5 with std=0.6 from recorded original V7/V20 formula; 26 balance terms, walk unchanged. Heading target fixed world +X; observations unchanged.",
-    "User-approved balance phase clock always visible to Actor/Critic; adds feet_clearance_deficit=-1.0 for scheduled swing foot. Balance now 27 terms; walk remains 23 and command-gated. New provenance records gait_clock; legacy replay restores moving_only.",
-    "2026-10-31 supersedes prior stage-specific settings: balance samples 50% zero and 50% uniform forward 0.05..0.10 m/s every 10 s; walk keeps fixed 0.2 m/s. Both share the existing 27 balance rewards, always-visible phase and tracking denominators 0.0025/0.04. Evaluation forces separate fixed commands; no PPO updates in this change."
-  ],
   "policy_source": {
     "init_noise_std": 1.0,
     "actor_hidden_dims": [
@@ -155,98 +127,53 @@
     "sym_coef": 1.0
   },
   "runtime_task_id": "RY-Unitree-Go2-Biped-Gait-v20",
+  "reward_profile": "upstream_handstand_23",
+  "formula_changes": [],
+  "adapter_changes": [
+    "Reorder simulator joints and bodies by explicit upstream names",
+    "Compute batch-mean height gate from current state before all terms; upstream call-order lag is not reproduced",
+    "Reset previous control-step joint velocity per environment",
+    "Expand scalar alive reward to one value per environment"
+  ],
+  "configuration_changes": [
+    "2026-10-31 user-approved restoration supersedes the previous 27-term reward modifications",
+    "23 nonzero upstream weights and all original reward method ASTs restored, including batch height gate and strict half-cycle boundary",
+    "Keep existing upright initialization, 56/155 observations and mixed commands for this reward-only comparison",
+    "Only material friction/restitution randomization is ported; other upstream domain randomization remains absent",
+    "Existing unitree_ros robot resource and Isaac Lab physics retained; this is not a full upstream training reproduction"
+  ],
   "tracking_denominators": {
     "balance": {
-      "linear": 0.0025,
-      "angular": 0.04
+      "linear": 0.25,
+      "angular": 0.25
     },
     "walk": {
-      "linear": 0.0025,
-      "angular": 0.04
+      "linear": 0.25,
+      "angular": 0.25
     }
   },
-  "original_project_reward_additions": {
-    "foot_slip": {
-      "stage": "balance and walk",
-      "weight": -0.5,
-      "original_source": "/workspace/unitree_rl_lab/source/unitree_rl_lab/unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py:feet_slide_l2",
-      "runtime_source": "ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py:feet_slide_l2",
-      "runtime_source_sha256": "1163a0f3945fa3fd70b9ab676c3ccdbb5e0bcb5bc3e41c04d46d52260ccc9cae",
-      "feet": [
-        "RL_foot",
-        "RR_foot"
-      ],
-      "contact": "current_contact_time > 0",
-      "formula": "sum(contact * (world_vx**2 + world_vy**2))",
-      "weight_adaptation": "none; original -0.5 retained"
-    }
+  "height_reward_and_task_gates": {
+    "height_target_m": 0.52,
+    "formula": "exp(-5*abs(height-0.52))",
+    "gate": "mean(height_score over all environments) > 0.70",
+    "update": "current control-step state before all rewards"
   },
-  "balance_stepping": {
-    "upstream_terms": {
-      "feet_clearance": 0.4,
-      "contact": 0.3
-    },
+  "reference_stepping": {
     "cycle_time_s": 1.6,
     "peak_height_m": 0.06,
-    "double_support_fraction": 0.2,
-    "clearance_width_m": 0.01,
-    "clearance_formula": "mean(exp(-abs(sole_height-target_height)/0.01)) * upright_gate",
-    "contact_formula": "mean(actual_contact == phase_stance) * upright_gate",
-    "swing_phase_intervals": [
-      [
-        0.05,
-        0.45
-      ],
-      [
-        0.55,
-        0.95
-      ]
-    ],
-    "foot_collision_radius_m": 0.022,
-    "foot_collision_offset_m": [
-      -0.002,
-      0,
-      0
-    ],
-    "notes": "User-approved phase targets shared by balance and walk: peak sole clearance 0.06 m, contact=0.9, clearance=1.0, deficit=-1.0. Positive scores require upright cosine >0.94; swing deficit has no height/orientation gate.",
-    "active_weights": {
-      "feet_clearance": 1.0,
-      "contact": 0.9,
-      "feet_clearance_deficit": -1.0
-    },
-    "deficit_formula": "sum(swing_mask * (relu(target_height-sole_height)/peak_height_m)**2)",
-    "deficit_origin": "User-approved new adaptation; not an upstream reference reward. Initial weight -1.0; existing positive feet_clearance retained."
+    "clearance_weight": 0.4,
+    "contact_weight": 0.3,
+    "clearance_formula": "sum(exp(-10*abs(foot_body_z-0.02-target))*swing_mask) * batch_height_gate",
+    "contact_formula": "exactly one hind foot Fz > 1 N, times batch_height_gate",
+    "half_cycle_boundary": "phase<0.5 left stance; phase>0.5 right stance; phase==0.5 both swing",
+    "custom_double_support": false
   },
-  "balance_yaw_constraints": {
-    "tracking_ang_vel_zero": {
-      "weight": -0.2,
-      "source": "https://github.com/yusongmin1/My_unitree_go2_gym/blob/main/legged_gym/envs/Go2_Stand/Go2_Leggedstand/Go2_Leggedstand.py#L916",
-      "config_source": "https://github.com/yusongmin1/My_unitree_go2_gym/blob/main/legged_gym/envs/Go2_Stand/Go2_Leggedstand/Go2_Leggedstand_Config.py",
-      "formula": "(command_yaw - world_angular_velocity_z)**2 * (abs(command_yaw) < 0.1)",
-      "adaptations": [
-        "World Z replaces the source front-support body -X convention",
-        "Per-environment gate replaces upstream batch-mean height gate",
-        "height_score uses current 0.52 m height target, rather than upstream Leggedstand 0.47 m",
-        "2026-10-31 supersedes earlier height gates: retain only command threshold; no height/orientation gate."
-      ],
-      "runtime_function": "gait_mdp.balance_zero_yaw_l2"
-    },
-    "heading_alignment": {
-      "weight": 1.5,
-      "std_rad": 0.6,
-      "target_heading_rad": 0.0,
-      "target_direction": "world_positive_x",
-      "source_record": "doc/原工程固定前腿与站立奖励分析.md",
-      "source_scope": "Recorded original /workspace/unitree_rl_lab V7/V20 formula and weights; server unavailable for fresh source read",
-      "formula": "exp(-(wrap_to_pi(upright_heading)/0.6)**2) * posture_gate",
-      "posture_gate": "exp(-sum((projected_gravity-[-1,0,0])**2)/0.7**2) * clamp((height-0.35)/0.15,0,1)",
-      "runtime_function": "gait_mdp.balance_heading_alignment",
-      "heading_axis": "horizontal projection of body -Z",
-      "target_observability": "fixed world +X; existing absolute heading sin/cos at Actor 50:52; no reset-specific hidden target"
-    },
-    "stage": "balance and walk",
-    "runtime_validation": "Shared across stages; current validation is recorded in doc/零速度踏步与低速前进混合训练.md"
-  },
+  "removed_active_terms": [
+    "feet_clearance_deficit",
+    "foot_slip",
+    "tracking_ang_vel_zero",
+    "heading_alignment"
+  ],
   "phase_observation": {
     "balance": "always",
     "walk": "always",
@@ -276,46 +203,14 @@
     "lateral_mps": 0.0,
     "yaw_radps": 0.0,
     "resampling_s": 10.0,
-    "automatic_speed_curriculum": false,
     "walk_entry_forward_mps": 0.2,
-    "shared_reward_count": 27,
+    "shared_reward_count": 23,
+    "initialization": "scratch",
+    "first_run_iterations": 1000,
+    "save_interval": 50,
+    "num_envs": 4096,
     "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "Previous mixed-command model_1998 evaluated; height reward and task gates updated, no training under new reward.",
-    "front_only_regularizers": [
-      "default_pos",
-      "symmetric_joints"
-    ],
-    "hind_regularizers_retained": [
-      "default_hip_pos",
-      "dof_pos_limits",
-      "action_rate",
-      "torques",
-      "dof_acc"
-    ],
-    "clearance_change": "Swing-only positive score deferred; existing two-foot score retained, with orientation-only gate. Swing deficit loses height gate."
+    "status": "restored; validation and launch recorded in doc/参考奖励恢复与从零训练对照.md"
   },
-  "height_reward_and_task_gates": {
-    "height_target_m": 0.52,
-    "height_reward_width_m": 0.05,
-    "height_reward_weight": 1.5,
-    "upright_gate": "-projected_gravity_x > 0.94",
-    "orientation_only_terms": [
-      "tracking_lin_vel",
-      "tracking_ang_vel",
-      "contact",
-      "feet_clearance"
-    ],
-    "ungated_penalties": [
-      "feet_clearance_deficit"
-    ],
-    "zero_yaw_gate": "abs(command_yaw) < 0.1",
-    "legacy_height_score": "exp(-5*abs(height-0.52))",
-    "legacy_height_score_terms": [
-      "ang_xz",
-      "symmetric_joints",
-      "default_pos_reward"
-    ],
-    "heading_alignment_gate": "unchanged soft posture and height gate",
-    "validation_record": "doc/高度奖励收紧与任务门控解耦.md"
-  }
+  "validation_record": "doc/参考奖励恢复与从零训练对照.md"
 }
