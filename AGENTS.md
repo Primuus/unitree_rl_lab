@@ -16,3 +16,14 @@
 - 使用 `scp` 前，无论大小都须说明用途、方向和预计大小，由用户决定；其他大文件传输同样事先确认。代码同步优先使用 Git，不搬运模型、数据集或环境归档。
 
 当前参数、命令与验证记录见 `doc/仓库使用说明.md` 和 `doc/V21_参考My_unitree_go2_gym的后腿步态优化方案.md`。上级工作区规范同样适用；用户最新指令优先。
+
+## 当前服务器连接
+
+跳板机已更新为 `houruibing@182.92.132.59:32768`，目标服务器仍为 `houruibing@10.29.150.42:22`（admin123-ESC8000A-E12）。本机 `unitree-train` 通过 `ProxyJump unitree-jump` 使用该链路。
+
+```bash
+ssh -J houruibing@182.92.132.59:32768 -p 22 houruibing@10.29.150.42
+docker exec -it -w /workspace/ry_unitree_rl_lab isaac-record bash
+```
+
+2026-10-31 连接恢复后已补齐此前待同步代码；当前同步与续训记录见 `doc/服务器连接恢复与第九轮续训.md`。源码按文件哈希核对，容器 Git HEAD 仍可能落后于工作区实际内容，不据提交号单独判断代码版本。
