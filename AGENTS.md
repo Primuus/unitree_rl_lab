@@ -34,3 +34,5 @@ docker exec -it -w /workspace/ry_unitree_rl_lab isaac-record bash
 ## 当前stage2续训
 
 用户批准从当前工程早期长训 logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_04-13-39_balance_balance_clearance10_continue500/model_5990.pt 进入walk继续500轮；4096环境、单卡、每50轮保存、结束自动评估零命令与0.05/0.10 m/s。用户确认抬脚峰值6 cm。walk新增非后脚接触超5 N终止（4个物理步历史，包括自碰撞），主要正奖励乘合法接触/高度/后脚总承重系数；相位接触要求完整匹配，抬脚正奖励移除卸载sigmoid。balance旧公式、已有27项权重不变。新profile在零命令评估时保留支撑约束。详见doc/Stage2_足端支撑与长训策略续训500轮.md。不重置优化器或探索标准差，不推送远程仓库。
+
+当前12动作MuJoCo部署关闭fuse_static并指定训练base的observation_com；本机MuJoCo 3.8.1自动融合会改变旋转固定转子的组合质心/惯性。保持关闭，勿仅凭总质量一致恢复融合。验证与残留后退/抖动见doc/Stage2_MuJoCo倾倒排查与固定关节融合修正.md。

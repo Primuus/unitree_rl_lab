@@ -34,8 +34,9 @@ def load_model(config, root):
         children.setdefault(joint.find("parent").get("link"), []).append(joint)
     visual_bodies = {b.get("name"): b for b in visual.iter("body")}
     xml = ET.Element("mujoco", model="Go2 reference handstand")
+    # Keep fixed links: local MuJoCo 3.8.1 fusion shifts rotated rotor inertias.
     ET.SubElement(xml, "compiler", angle="radian", meshdir=str(source / "obj"),
-                  autolimits="true", fusestatic=str(config.get("fuse_static", True)).lower())
+                  autolimits="true", fusestatic=str(config.get("fuse_static", False)).lower())
     ET.SubElement(xml, "option", timestep=str(config["physics_dt"]),
                   gravity="0 0 -9.81", integrator="implicitfast", cone="elliptic")
     ET.SubElement(xml, "size", nuser_jnt="1")

@@ -34,3 +34,7 @@
 运行：
     cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
     ./run.sh
+
+## 后续部署修正
+
+上述2.16秒倒地是修正前结果，完整保留。后续已定位并修正本机MuJoCo固定关节融合造成的质心/惯性偏差；60秒与多初态回放无倒地，但仍后退和转动抖动，见[排查与修正](Stage2_MuJoCo倾倒排查与固定关节融合修正.md)。

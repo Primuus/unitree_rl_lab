@@ -13,7 +13,7 @@ cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 ./run.sh
 ```
 
-默认加载model_6489的TorchScript策略，平地、前进0.05 m/s，从后腿直立附近开始。按R重置，空格暂停/继续；关闭窗口或Ctrl+C退出。20秒本地回放数值有限，但约2.16秒触发基座接触并倒下，不能视为已完成稳定sim2sim。查看器继续显示实际状态，不自动重置。
+默认加载model_6489的TorchScript策略，平地、前进0.05 m/s，从后腿直立附近开始。按R重置，空格暂停/继续；关闭窗口或Ctrl+C退出。原部署曾在2.16秒倒下；现已修正固定关节融合造成的质心/惯性偏差。默认初态60秒和三组扰动20秒均未倒下，但仍缓慢后退及转动抖动，未实现正常前进。见[倾倒排查与修正](Stage2_MuJoCo倾倒排查与固定关节融合修正.md)。查看器继续显示实际状态，不自动重置。
 
 也可在已激活的环境中运行：
 
@@ -58,7 +58,7 @@ python deploy.py --headless --duration 20 --output outputs/stage2_foot_support_6
 
 | 切片 | 内容 |
 | --- | --- |
-| 0:3 | 直立航向坐标系线速度；使用基座质心速度 |
+| 0:3 | 直立航向坐标系线速度；使用训练合并基座的质心速度 |
 | 3:6 | 本体角速度 × 0.25 |
 | 6:9 | 本体重力投影 |
 | 9:12 | 命令，balance 为零 |
@@ -80,7 +80,7 @@ python deploy.py --headless --duration 20 --output outputs/stage2_foot_support_6
 
 `resources/go2_description.urdf` 是从服务器 `/workspace/unitree_ros/robots/go2_description/urdf/go2_description.urdf` 读取的原始文件，SHA256 已核对。它不依赖旧六动作资源。
 
-`model.py` 在加载时转换该 URDF 的运动链、质量、惯量、原始碰撞基元和关节限位，复用参考工程 XML 中的视觉网格与材质。保留原始转子、头部和足端质量，并融合固定关节，总质量为 16.087 kg；通过 site 保留足端位置。圆柱按训练导入选项转换为胶囊。关节无额外被动阻尼、摩擦或 armature，控制阻尼由 PD 提供。地面/机器人采用固定摩擦参数，不执行训练时的材质随机化。
+`model.py` 在加载时转换该 URDF 的运动链、质量、惯量、原始碰撞基元和关节限位，复用参考工程 XML 中的视觉网格与材质。保留原始转子、头部和足端质量，并保留固定连接，总质量为 16.087 kg；通过 site 保留足端位置。圆柱按训练导入选项转换为胶囊。关节无额外被动阻尼、摩擦或 armature，控制阻尼由 PD 提供。地面/机器人采用固定摩擦参数，不执行训练时的材质随机化。
 
 本部署借鉴 `quadruped` 的策略加载、逐步 PD、关节名称映射和 viewer 关闭流程；观测和初始化针对本任务独立实现。PhysX 与 MuJoCo 的接触求解并不相同，参数对应不等于两引擎轨迹一致。
 
@@ -130,3 +130,7 @@ Isaac 评估记录保留于服务器 `logs/evaluation/stage1_continue_final_1998
 默认 `gait_clock_mode=auto` 从所选策略同级运行目录的 `params/provenance.json` 读取 `layout.gait_clock`。旧来源文件无该字段时，按历史 `moving_only` 模式和 1.6 s 周期回放；新 balance 使用 `always`。下载新策略时须携带其配套来源文件。缺少来源文件时不猜测模式；自定义策略可通过 `--config` 指定明确的 `always` 或 `moving_only`。实际模式打印在启动日志和输出 JSON 中。
 
 历史 model_5990 自动选择旧模式；20 s 回放与修复前的 1000 个轨迹样本及原有统计字段完全一致，记录于 `outputs/balance_5990_phase_contract_legacy_20s.json`。完整说明见 [相位与欠抬脚接入说明](站立相位观测与欠抬脚惩罚.md)。
+
+## 当前固定关节处理
+
+当前12动作与原工程6动作配置均关闭fuse_static。固定转子和足端保留为无自由度的子体，按训练base质心设置observation_com。关闭编译融合不增加动作或自由度；本次未改PD、摩擦或策略。10项部署回归检查通过，详细对照见[Stage2_MuJoCo倾倒排查与固定关节融合修正](Stage2_MuJoCo倾倒排查与固定关节融合修正.md)。

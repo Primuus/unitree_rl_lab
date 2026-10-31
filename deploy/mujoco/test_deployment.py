@@ -50,7 +50,7 @@ class DeploymentTests(unittest.TestCase):
         forces = Simulation.forces(state)
         np.testing.assert_allclose(forces[2], [0, 0, 9.81], atol=.01)
 
-    def test_source_mass_limits_and_fixed_body_fusion(self):
+    def test_source_mass_limits_and_fixed_bodies(self):
         model = load_model(CFG, ROOT)
         self.assertEqual(model.nu, 12)
         self.assertEqual(model.nq, 19)
@@ -59,8 +59,8 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(visuals.any())
         self.assertTrue(np.all(model.geom_type[visuals] == mujoco.mjtGeom.mjGEOM_MESH))
         self.assertAlmostEqual(model.body_mass.sum(), 16.087)
-        # Root includes head + four fixed hip rotors, as merge_fixed_joints in Isaac.
-        self.assertAlmostEqual(model.body("base").mass[0], 6.921+.002+4*.089)
+        # Fixed components remain attached without compiler fusion; total DOFs stay unchanged.
+        self.assertAlmostEqual(model.body("base").mass[0], 6.921)
         source = ET.parse(ROOT/"resources/go2_description.urdf").getroot()
         for joint in source.findall("joint"):
             if joint.get("type") != "revolute":
@@ -72,6 +72,29 @@ class DeploymentTests(unittest.TestCase):
                                        [-float(limit.get("effort")), float(limit.get("effort"))])
             self.assertAlmostEqual(model.jnt_user[model.joint(name).id, 0],
                                    float(limit.get("velocity")))
+
+    def test_current_rotor_centroids_and_training_com_observation(self):
+        sim = Simulation(CFG, ROOT/CFG["policy"])
+        for name, sign in [("FL_thigh",-1),("FR_thigh",1),("RL_thigh",-1),("RR_thigh",1)]:
+            body = sim.model.body(name).id
+            ids = np.flatnonzero(sim.model.body_weldid == body)
+            mass = sim.model.body_mass[ids]
+            world_com = (mass[:,None]*sim.data.xipos[ids]).sum(0)/mass.sum()
+            local_com = sim.data.xmat[body].reshape(3,3).T @ (world_com-sim.data.xpos[body])
+            self.assertAlmostEqual(mass.sum(), 1.241)
+            # Measured Isaac merged-thigh COM, also independently obtained from source URDF.
+            np.testing.assert_allclose(local_com,[-.003471780801,sign*.023020749912,-.030354874209],atol=2e-9)
+        sim.data.qvel[:6] = [.2,-.1,.3,.4,.5,-.6]
+        mujoco.mj_forward(sim.model,sim.data)
+        rotation = sim.data.xmat[sim.base].reshape(3,3)
+        point = sim.data.xpos[sim.base] + rotation @ np.asarray(CFG["observation_com"])
+        jac = np.zeros((3,sim.model.nv)); rot = np.zeros_like(jac)
+        mujoco.mj_jac(sim.model,sim.data,jac,rot,point,sim.base)
+        velocity = jac @ sim.data.qvel
+        yaw = np.arctan2(-rotation[1,2],-rotation[0,2])
+        expected = [np.cos(yaw)*velocity[0]+np.sin(yaw)*velocity[1],
+                    -np.sin(yaw)*velocity[0]+np.cos(yaw)*velocity[1],velocity[2]]
+        np.testing.assert_allclose(sim.observation()[:3],expected,atol=1e-7)
 
     def test_first_step_velocity_limit_and_position_increment(self):
         sim = Simulation(CFG, ROOT/CFG["policy"])
