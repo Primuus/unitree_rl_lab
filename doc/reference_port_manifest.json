@@ -51,8 +51,9 @@
     "Fixed commands: balance=(0,0,0), walk=(0.2,0,0); plane terrain",
     "Only material friction/restitution randomization is ported; other upstream domain randomization is not implemented",
     "User-approved balance tracking denominators: linear=0.0025, angular=0.04; walk linear and angular remain 0.25; tracking reward weights unchanged",
-    "User-approved balance-only foot_slip=-0.5 inherited from original /workspace/unitree_rl_lab; 24 balance rewards, 23 walk rewards; reference weights retained except the user-approved balance contact override",
-    "User explicitly raises balance phase-contact weight from 0.3 to 0.9; clearance remains 0.4, walk contact remains 0.3"
+    "User-approved balance-only foot_slip=-0.5 inherited from original /workspace/unitree_rl_lab; 24 balance rewards, 23 walk rewards; reference weights retained except user-approved balance contact and feet_clearance overrides",
+    "User explicitly raises balance phase-contact weight from 0.3 to 0.9; clearance remains 0.4, walk contact remains 0.3",
+    "Subsequent user request raises only balance feet_clearance from 0.4 to 1.0; contact remains 0.9, walk clearance remains 0.4"
   ],
   "policy_source": {
     "init_noise_std": 1.0,
@@ -200,9 +201,9 @@
       0,
       0
     ],
-    "notes": "User-approved adaptation, not unchanged upstream formulas. Subsequent user request changes only balance contact weight from 0.3 to 0.9; original walk rewards preserved.",
+    "notes": "User-approved small-step adaptation, not unchanged upstream formulas. User subsequently sets balance contact=0.9 and feet_clearance=1.0; original walk rewards preserved.",
     "active_weights": {
-      "feet_clearance": 0.4,
+      "feet_clearance": 1.0,
       "contact": 0.9
     }
   }

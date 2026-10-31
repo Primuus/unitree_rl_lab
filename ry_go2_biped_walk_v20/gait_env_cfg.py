@@ -98,6 +98,7 @@ def configure_stage(cfg, stage):
             setattr(cfg.rewards, name, RewTerm(func=gm.balance_step_reward,
                     weight=REFERENCE["reward_scales"][name], params={"name": name}))
         cfg.rewards.contact.weight = 0.9
+        cfg.rewards.feet_clearance.weight = 1.0
         cfg.rewards.foot_slip = RewTerm(
             func=wm.feet_slide_l2, weight=-0.5,
             params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS})

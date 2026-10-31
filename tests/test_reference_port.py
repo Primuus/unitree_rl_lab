@@ -166,7 +166,7 @@ class ReferencePortTests(unittest.TestCase):
                 for name in ("contact", "feet_clearance"):
                     term = getattr(cfg.rewards, name)
                     self.assertIs(term.func, namespace["gm"].balance_step_reward)
-                    self.assertEqual(term.weight, .9 if name == "contact" else .4)
+                    self.assertEqual(term.weight, .9 if name == "contact" else 1.0)
                 term = cfg.rewards.foot_slip
                 self.assertEqual(term.weight, -0.5)
                 self.assertIs(term.func, namespace["wm"].feet_slide_l2)
