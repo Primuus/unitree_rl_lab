@@ -47,11 +47,11 @@
   "configuration_changes": [
     "Upright initialization from upstream desired angles, rather than quadruped reset",
     "Existing 56/155 observation layout retained with 12 joints",
-    "Balance stage disables contact and feet_clearance; walk uses all 23 upstream terms",
+    "Balance restores contact and feet_clearance with user-approved small-step adaptations; walk uses all 23 upstream terms",
     "Fixed commands: balance=(0,0,0), walk=(0.2,0,0); plane terrain",
     "Only material friction/restitution randomization is ported; other upstream domain randomization is not implemented",
     "User-approved balance tracking denominators: linear=0.0025, angular=0.04; walk linear and angular remain 0.25; all reward weights unchanged",
-    "User-approved balance-only foot_slip=-0.5 inherited from original /workspace/unitree_rl_lab; 22 balance rewards, 23 walk rewards; reference reward weights unchanged"
+    "User-approved balance-only foot_slip=-0.5 inherited from original /workspace/unitree_rl_lab; 24 balance rewards, 23 walk rewards; reference reward weights unchanged"
   ],
   "policy_source": {
     "init_noise_std": 1.0,
@@ -171,5 +171,34 @@
       "formula": "sum(contact * (world_vx**2 + world_vy**2))",
       "weight_adaptation": "none; original -0.5 retained"
     }
+  },
+  "balance_stepping": {
+    "upstream_terms": {
+      "feet_clearance": 0.4,
+      "contact": 0.3
+    },
+    "cycle_time_s": 1.6,
+    "peak_height_m": 0.02,
+    "double_support_fraction": 0.2,
+    "clearance_width_m": 0.01,
+    "clearance_formula": "mean(exp(-abs(sole_height-target_height)/0.01)) * height_gate",
+    "contact_formula": "mean(actual_contact == phase_stance) * height_gate",
+    "swing_phase_intervals": [
+      [
+        0.05,
+        0.45
+      ],
+      [
+        0.55,
+        0.95
+      ]
+    ],
+    "foot_collision_radius_m": 0.022,
+    "foot_collision_offset_m": [
+      -0.002,
+      0,
+      0
+    ],
+    "notes": "User-approved adaptation, not unchanged upstream formulas; original walk rewards preserved."
   }
 }

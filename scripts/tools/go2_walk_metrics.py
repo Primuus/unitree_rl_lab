@@ -10,6 +10,11 @@ class GaitMetrics:
         self.count=torch.zeros(n,device=d)
         self.sums={k:torch.zeros(n,device=d) for k in ['speed','upright','single_support','flight','height','stance_slip_speed','lateral_speed_abs','vertical_speed_abs','front_contact','speed_error','horizontal_speed','yaw_rate_abs']}
         self.start=robot.data.root_pos_w[:,:2].clone(); self.end=self.start.clone()
+        self.max_horizontal_displacement=torch.zeros(n,device=d)
+        self.cycle_start=self.start.clone()
+        self.cycle_displacements=[]
+        self.cycle_steps=round(1.6/raw.step_dt)
+        self.min_landing_height=.008 if raw.cfg.stage=='balance' else .02
         yaw=wm.upright_heading(raw); self.forward=torch.stack((torch.cos(yaw),torch.sin(yaw)),-1)
         self.contact=torch.ones(n,2,dtype=torch.bool,device=d)
         self.air=torch.zeros(n,2,device=d); self.peak=self.air.clone(); self.duration=self.air.clone()
@@ -39,7 +44,7 @@ class GaitMetrics:
         self.duration=torch.where(self.contact,self.duration+dt,0.)
         self.air=torch.where(~self.contact,self.air+dt,0.)
         self.peak=torch.where(~self.contact,torch.maximum(self.peak,h),0.)
-        event=self.pending&(self.duration>=0.04)&(self.landing_air>=0.06)&(self.landing_peak>=0.02)&((now-self.last_time)>=0.18)
+        event=self.pending&(self.duration>=0.04)&(self.landing_air>=0.06)&(self.landing_peak>=self.min_landing_height)&((now-self.last_time)>=0.18)
         simultaneous=event.all(-1); event &= ~simultaneous[:,None]
         for foot in range(2):
             e=event[:,foot]; self.alternations+=(e&(self.last_foot>=0)&(self.last_foot!=foot)).long()
@@ -60,6 +65,12 @@ class GaitMetrics:
                     yaw_rate_abs=robot.data.root_ang_vel_w[:,2].abs())
         for key,value in values.items(): self.sums[key]+=value*valid
         self.count+=valid.float(); self.end=torch.where(valid[:,None],robot.data.root_pos_w[:,:2],self.end)
+        distance=(self.end-self.start).norm(dim=-1)
+        self.max_horizontal_displacement=torch.maximum(self.max_horizontal_displacement,distance)
+        if (step+1)%self.cycle_steps==0:
+            displacement=(self.end-self.cycle_start).norm(dim=-1)
+            self.cycle_displacements.append(dict(time_s=now,displacement_m=displacement.tolist(),valid=valid.tolist()))
+            self.cycle_start=self.end.clone()
         self.active &= ~done
         if step%5==0:
             self.trace.append(dict(time_s=now,active=bool(valid[0]),position=robot.data.root_pos_w[0].tolist(),
@@ -82,6 +93,12 @@ class GaitMetrics:
                       touchdowns_mean=self.touch.float().mean(0).tolist(),raw_touchdowns_mean=self.raw_touch.float().mean(0).tolist(),
                       qualified_touchdowns_per_env=self.touch.tolist(),valid_seconds_per_env=seconds.tolist(),
                       net_forward_displacement_m=displacement.tolist(),alternation_fraction_per_env=alternate.tolist(),
+                      net_horizontal_displacement_m=(self.end-self.start).norm(dim=-1).tolist(),
+                      max_horizontal_displacement_m=self.max_horizontal_displacement.tolist(),
+                      cycle_duration_s=self.cycle_steps*self.raw.step_dt,
+                      cycle_displacements=self.cycle_displacements,
+                      landing_thresholds=dict(min_air_s=.06,min_lift_m=self.min_landing_height,min_support_s=.04),
+                      alternating_steps_per_env=((self.touch.min(-1).values>=4)&(alternate>.8)).tolist(),
                       max_relative_foot_height=self.max_height.amax(0).tolist(),walking_acceptance_per_env=passed.tolist(),
                       walking_acceptance_passed=bool(has_policy and self.raw.cfg.stage=='walk' and passed.all()),
                       balance_acceptance_passed=bool(has_policy and self.raw.cfg.stage=='balance' and balance_passed.all()))

@@ -94,8 +94,9 @@ def configure_stage(cfg, stage):
     cfg.tracking_lin_vel_sigma = 0.0025 if stage == "balance" else REFERENCE["reward_parameters"]["tracking_sigma"]
     cfg.tracking_ang_vel_sigma = 0.04 if stage == "balance" else REFERENCE["reward_parameters"]["tracking_sigma"]
     if stage == "balance":
-        cfg.rewards.contact = None
-        cfg.rewards.feet_clearance = None
+        for name in ("contact", "feet_clearance"):
+            setattr(cfg.rewards, name, RewTerm(func=gm.balance_step_reward,
+                    weight=REFERENCE["reward_scales"][name], params={"name": name}))
         cfg.rewards.foot_slip = RewTerm(
             func=wm.feet_slide_l2, weight=-0.5,
             params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS})
@@ -110,6 +111,9 @@ class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     stage: str = "balance"
     tracking_lin_vel_sigma: float = 0.0025
     tracking_ang_vel_sigma: float = 0.04
+    balance_step_height: float = 0.02
+    balance_double_support_fraction: float = 0.2
+    balance_clearance_width: float = 0.01
     scene: ReferenceSceneCfg = ReferenceSceneCfg(num_envs=4096, env_spacing=3.0)
     actions: ReferenceActionsCfg = ReferenceActionsCfg()
     observations: V20ObservationsCfg = V20ObservationsCfg()

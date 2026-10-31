@@ -21,6 +21,7 @@ def module(name, path):
 reference = module("reference_config", "ry_go2_biped_walk_v20/reference_config.py").REFERENCE
 ported = module("ported_rewards", "ry_go2_biped_walk_v20/reference_rewards.py").ReferenceRewards
 symmetry = module("current_symmetry", "ry_go2_biped_walk_v20/symmetry.py")
+stepping = module("stepping_rewards", "ry_go2_biped_walk_v20/stepping_rewards.py")
 source = (ROOT / "third_party/My_unitree_go2_gym/Go2_Handstand.py").read_text()
 original_class = next(n for n in ast.parse(source).body if isinstance(n, ast.ClassDef))
 original_methods = {n.name: n for n in original_class.body if isinstance(n, ast.FunctionDef)}
@@ -153,6 +154,7 @@ class ReferencePortTests(unittest.TestCase):
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "configure_stage")
         namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": SimpleNamespace,
                      "RewTerm": SimpleNamespace, "wm": SimpleNamespace(feet_slide_l2=object()),
+                     "gm": SimpleNamespace(balance_step_reward=object()),
                      "REAR_BODIES": object(), "REAR_CONTACTS": object()}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<configure_stage>", "exec"), namespace)
         cfg = SimpleNamespace(commands=SimpleNamespace(base_velocity=SimpleNamespace(ranges=SimpleNamespace())))
@@ -160,6 +162,10 @@ class ReferencePortTests(unittest.TestCase):
             namespace["configure_stage"](cfg, stage)
             self.assertEqual((cfg.tracking_lin_vel_sigma, cfg.tracking_ang_vel_sigma), (linear, angular))
             if stage == "balance":
+                for name in ("contact", "feet_clearance"):
+                    term = getattr(cfg.rewards, name)
+                    self.assertIs(term.func, namespace["gm"].balance_step_reward)
+                    self.assertEqual(term.weight, reference["reward_scales"][name])
                 term = cfg.rewards.foot_slip
                 self.assertEqual(term.weight, -0.5)
                 self.assertIs(term.func, namespace["wm"].feet_slide_l2)
@@ -194,6 +200,28 @@ class ReferencePortTests(unittest.TestCase):
         obj = sample(ported)
         obj.episode_length_buf = torch.tensor([0, 40, 80, 120, 160, 200, 240, 280])
         torch.testing.assert_close(obj._get_gait_phase().sum(-1), torch.ones(8))
+
+    def test_small_steps_alternate_with_double_support_and_no_flight_target(self):
+        phase = torch.tensor([0., .025, .25, .475, .5, .525, .75, .975])
+        height, stance = stepping.step_targets(phase)
+        torch.testing.assert_close(height[[2, 6]], torch.tensor([[.02, 0.], [0., .02]]))
+        self.assertTrue(stance[[0, 1, 3, 4, 5, 7]].all())
+        self.assertTrue(stance.any(-1).all())
+        torch.testing.assert_close(stepping.clearance_score(height, height), torch.ones(8))
+        self.assertTrue((stepping.clearance_score(torch.zeros_like(height), height)[[2, 6]] < .6).all())
+        torch.testing.assert_close(stepping.contact_score(stance, stance), torch.ones(8))
+        # Keeping only one leg on the ground cannot satisfy both swing phases.
+        fixed_right = torch.tensor([[False, True]]).expand(8, 2)
+        torch.testing.assert_close(stepping.contact_score(fixed_right, stance)[[2, 6]], torch.tensor([1., 0.]))
+
+    def test_small_steps_repeat_and_mirror_after_half_cycle(self):
+        phase = torch.arange(80) / 80
+        height, stance = stepping.step_targets(phase)
+        h2, s2 = stepping.step_targets(phase + .5)
+        torch.testing.assert_close(h2, height.flip(-1), atol=1e-7, rtol=1e-5)
+        # Avoid floating-point comparisons exactly on phase boundaries.
+        interior = ((phase * 100).round().long() % 5 != 0)
+        self.assertTrue(torch.equal(s2[interior], stance.flip(-1)[interior]))
 
     def test_reflection_round_trip_and_native_joint_permutation(self):
         joints = symmetry.ACTION_NAMES[::3] + symmetry.ACTION_NAMES[1::3] + symmetry.ACTION_NAMES[2::3]
