@@ -179,11 +179,15 @@ class ReferencePortTests(unittest.TestCase):
                 self.assertIs(cfg.rewards.heading_alignment.func, namespace['gm'].balance_heading_alignment)
                 self.assertEqual(cfg.rewards.heading_alignment.params['std'], .6)
                 self.assertIs(cfg.rewards.heading_alignment.params['sensor_cfg'], namespace['SCANNER'])
-                self.assertEqual(len(vars(cfg.rewards)), 26)
+                self.assertEqual(cfg.rewards.feet_clearance_deficit.weight, -1.)
+                self.assertEqual(cfg.rewards.feet_clearance_deficit.params, {'name': 'feet_clearance_deficit'})
+                self.assertIs(cfg.rewards.feet_clearance_deficit.func, namespace['gm'].balance_step_reward)
+                self.assertEqual(len(vars(cfg.rewards)), 27)
             else:
                 self.assertFalse(hasattr(cfg.rewards, "foot_slip"))
                 self.assertFalse(hasattr(cfg.rewards, "tracking_ang_vel_zero"))
                 self.assertFalse(hasattr(cfg.rewards, "heading_alignment"))
+                self.assertFalse(hasattr(cfg.rewards, "feet_clearance_deficit"))
                 self.assertEqual(len(vars(cfg.rewards)), 23)
                 self.assertEqual(cfg.rewards.contact.weight, .3)
                 self.assertEqual(cfg.rewards.feet_clearance.weight, .4)
@@ -276,6 +280,74 @@ class ReferencePortTests(unittest.TestCase):
         # Avoid floating-point comparisons exactly on phase boundaries.
         interior = ((phase * 100).round().long() % 5 != 0)
         self.assertTrue(torch.equal(s2[interior], stance.flip(-1)[interior]))
+
+    def test_swing_shortfall_decreases_with_lift_and_ignores_support(self):
+        phase = torch.tensor([.25, .25, .25, .25, .75, 0., .5])
+        target, stance = stepping.step_targets(phase)
+        height = torch.tensor([[0., 0.], [.03, .2], [.06, 0.], [.08, 0.],
+                               [.2, .03], [0., 0.], [0., 0.]])
+        cost = stepping.clearance_deficit(height, target, ~stance)
+        torch.testing.assert_close(cost, torch.tensor([1., .25, 0., 0., .25, 0., 0.]))
+        target2, stance2 = stepping.step_targets(phase+.5)
+        torch.testing.assert_close(stepping.clearance_deficit(height.flip(-1), target2, ~stance2), cost)
+
+    def test_shortfall_adapter_uses_sole_height_and_existing_per_env_gate(self):
+        path = ROOT/'ry_go2_biped_walk_v20/gait_mdp.py'
+        fn = next(n for n in ast.parse(path.read_text()).body
+                  if isinstance(n, ast.FunctionDef) and n.name == 'balance_step_reward')
+        positions = torch.zeros(3,4,3)
+        positions[:,:,2] = .022
+        positions[1,2,2] += .03
+        s = SimpleNamespace(_get_phase=lambda:torch.full((3,),.25),num_envs=3,contact_foot_indices=[2,3],
+                            measured_heights=torch.zeros(3,1),rew_hanstand=torch.tensor([1.,1.,.69]),
+                            robot=SimpleNamespace(data=SimpleNamespace(body_pos_w=positions,
+                                                                       body_quat_w=torch.zeros(3,4,4))))
+        namespace = {'state':lambda _:s,'step_targets':stepping.step_targets,
+                     'clearance_score':stepping.clearance_score,'clearance_deficit':stepping.clearance_deficit,
+                     'quat_apply':lambda quat,offset:offset}
+        exec(compile(ast.Module(body=[fn],type_ignores=[]),str(path),'exec'),namespace)
+        env = SimpleNamespace(num_envs=3,cfg=SimpleNamespace(balance_step_height=.06,balance_double_support_fraction=.2,
+                                                   balance_clearance_width=.01))
+        torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance_deficit'),
+                                   torch.tensor([1.,.25,0.]))
+        expected = torch.tensor([(1.+torch.exp(torch.tensor(-6.)))/2,
+                                 (1.+torch.exp(torch.tensor(-3.)))/2,0.])
+        torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance'),expected)
+
+    def test_balance_clock_exposes_target_phase_and_keeps_legacy_walk_gate(self):
+        import math
+        original_path = ROOT/'ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py'
+        nodes = [n for n in ast.parse(original_path.read_text()).body
+                 if isinstance(n, ast.FunctionDef) and n.name in ('moving', 'phases', 'gait_clock')]
+        original = {'torch': torch, 'math': math}
+        exec(compile(ast.Module(body=nodes, type_ignores=[]), str(original_path), 'exec'), original)
+        path = ROOT/'ry_go2_biped_walk_v20/gait_mdp.py'
+        fn = next(n for n in ast.parse(path.read_text()).body
+                  if isinstance(n, ast.FunctionDef) and n.name == 'gait_clock')
+        namespace = {'torch': torch, 'wm': SimpleNamespace(gait_clock=original['gait_clock'])}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(path), 'exec'), namespace)
+        command = torch.zeros(4, 3)
+        env = SimpleNamespace(cfg=SimpleNamespace(stage='balance', balance_gait_clock='always'),
+                              episode_length_buf=torch.tensor([0, 20, 40, 60]),step_dt=.02,
+                              num_envs=4,device='cpu',
+                              command_manager=SimpleNamespace(get_command=lambda _: command))
+        clock = namespace['gait_clock'](env)
+        torch.testing.assert_close(clock, torch.tensor([[0.,1.],[1.,0.],[0.,-1.],[-1.,0.]]),atol=1e-6,rtol=1e-5)
+        target, _ = stepping.step_targets(env.episode_length_buf*.02/1.6)
+        self.assertGreater(target[1,0], 0.)
+        self.assertGreater(target[3,1], 0.)
+        obs = torch.zeros(4,56); obs[:,12:14] = clock
+        mirrored = symmetry.mirror_policy(obs, symmetry.POLICY_NAMES, symmetry.POLICY_DIMS, symmetry.ACTION_NAMES)
+        env.episode_length_buf += 40
+        torch.testing.assert_close(mirrored[:,12:14], namespace['gait_clock'](env),atol=1e-6,rtol=1e-5)
+        env.episode_length_buf[:] = 0
+        torch.testing.assert_close(namespace['gait_clock'](env),torch.tensor([[0.,1.]]).expand(4,2))
+        env.cfg.balance_gait_clock = 'moving_only'
+        torch.testing.assert_close(namespace['gait_clock'](env),torch.zeros(4,2))
+        env.cfg.stage = 'walk'; env.cfg.balance_gait_clock = 'always'
+        torch.testing.assert_close(namespace['gait_clock'](env),torch.zeros(4,2))
+        command[:,0] = .2
+        torch.testing.assert_close(namespace['gait_clock'](env),torch.tensor([[0.,1.]]).expand(4,2))
 
     def test_reflection_round_trip_and_native_joint_permutation(self):
         joints = symmetry.ACTION_NAMES[::3] + symmetry.ACTION_NAMES[1::3] + symmetry.ACTION_NAMES[2::3]

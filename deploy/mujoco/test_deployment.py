@@ -12,6 +12,7 @@ from deploy import Simulation
 from model import load_model
 from observation import build_observation
 from policy import Policy
+from ry_unitree_rl_lab.utils.phase_contract import read_gait_clock
 
 ROOT = Path(__file__).resolve().parent
 CFG = json.loads((ROOT/"config.json").read_text())
@@ -25,7 +26,8 @@ class DeploymentTests(unittest.TestCase):
         q = offsets+np.arange(12)/10
         obs = build_observation(rotation, np.array([0., 1., 0.]), np.array([4., 8., 12.]),
                                 q, np.arange(12)*20., np.arange(12),
-                                np.array([.02, .05]), np.array([.4, .6])*16.087*9.81, 1., CFG)
+                                np.array([.02, .05]), np.array([.4, .6])*16.087*9.81, 1.,
+                                {**CFG, 'gait_clock_mode':'moving_only'})
         np.testing.assert_allclose(obs[:3], [1, 0, 0], atol=1e-7)
         np.testing.assert_allclose(obs[3:9], [1, 2, 3, -1, 0, 0])
         np.testing.assert_array_equal(obs[9:14], np.zeros(5))
@@ -89,6 +91,28 @@ class DeploymentTests(unittest.TestCase):
         inputs = np.random.default_rng(1).normal(size=(16, 56)).astype(np.float32)
         for obs in inputs:
             np.testing.assert_allclose(pt(obs), onnx(obs), rtol=1e-4, atol=2e-5)
+
+    def test_saved_clock_contract_and_legacy_policy_replay(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)/'provenance.json'
+            path.write_text(json.dumps({'layout':{}}))
+            self.assertEqual(read_gait_clock(path), {'mode':'moving_only','period_s':1.6})
+            path.write_text(json.dumps({'layout':{'gait_clock':{'mode':'always','period_s':1.6}}}))
+            self.assertEqual(read_gait_clock(path), {'mode':'always','period_s':1.6})
+        sim = Simulation(CFG, ROOT/CFG['policy'])
+        self.assertEqual(sim.cfg['gait_clock_mode'], 'moving_only')
+        self.assertEqual(CFG['gait_clock_mode'], 'auto')
+        np.testing.assert_array_equal(sim.observation()[12:14], [0.,0.])
+        with patch('deploy.read_gait_clock', return_value={'mode':'always','period_s':1.6}):
+            modern = Simulation(CFG, ROOT/CFG['policy'])
+        self.assertEqual(modern.cfg['gait_clock_mode'], 'always')
+        for t, expected in [(0.,[0.,1.]),(.4,[1.,0.]),(.8,[0.,-1.]),(1.2,[-1.,0.])]:
+            modern.data.time = t
+            np.testing.assert_allclose(modern.observation()[12:14], expected, atol=1e-6)
+        modern.reset()
+        np.testing.assert_array_equal(modern.observation()[12:14], [0.,1.])
 
     def test_acceptance_rejects_turning_and_excludes_post_failure_motion(self):
         sim = Simulation(CFG, ROOT/CFG['policy'])

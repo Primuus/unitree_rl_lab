@@ -12,6 +12,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--task", default="RY-Unitree-Go2-Biped-Gait-v20")
 parser.add_argument("--checkpoint", type=Path)
 parser.add_argument("--stage", choices=["balance", "walk"], default="walk")
+parser.add_argument("--gait_clock", choices=["auto", "always", "moving_only"], default="auto",
+                    help="auto reads the checkpoint observation contract; overrides are diagnostic")
 parser.add_argument("--num_envs", type=int, default=16)
 parser.add_argument("--steps", type=int, default=1000)
 parser.add_argument("--speed", type=float, default=0.2)
@@ -42,6 +44,7 @@ import gymnasium as gym
 from rsl_rl.runners import OnPolicyRunner
 from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
 from ry_unitree_rl_lab.utils.parser_cfg import parse_env_cfg
+from ry_unitree_rl_lab.utils.phase_contract import read_gait_clock
 from isaaclab_tasks.utils import load_cfg_from_registry
 from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk import walk_mdp as wm
 from isaaclab.managers import SceneEntityCfg
@@ -57,6 +60,14 @@ def main():
     cfg = parse_env_cfg(args.task, device=args.device, num_envs=args.num_envs,
                         entry_point_key="play_env_cfg_entry_point")
     configure_stage(cfg, args.stage)
+    if args.stage == "balance":
+        if args.gait_clock != "auto":
+            cfg.balance_gait_clock = args.gait_clock
+        elif args.checkpoint:
+            clock = read_gait_clock(args.checkpoint.parent/"params/provenance.json")
+            cfg.balance_gait_clock = clock["mode"]
+            if clock["period_s"] != cfg.observations.policy.gait_phase.params["period"]:
+                raise ValueError("Checkpoint gait period differs from current evaluation configuration")
     cfg.seed = args.seed
     cfg.episode_length_s = max(cfg.episode_length_s, args.steps * cfg.sim.dt * cfg.decimation + 1)
     cfg.commands.base_velocity.ranges.lin_vel_x = (args.speed, args.speed) if args.stage == "walk" else (0., 0.)
@@ -108,6 +119,7 @@ def main():
             writer.close()
     result = metrics.result(policy is not None)
     result.update(task=args.task, stage=args.stage, checkpoint=str(args.checkpoint) if args.checkpoint else None,
+                  gait_clock_override=args.gait_clock,
                   checkpoint_sha256=hashlib.sha256(args.checkpoint.read_bytes()).hexdigest() if args.checkpoint else None,
                   mode="trained_policy" if policy else "zero_action_smoke", finite=True,
                   steps=args.steps, seconds_per_env=args.steps*raw.step_dt, num_envs=raw.num_envs,

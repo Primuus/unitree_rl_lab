@@ -18,6 +18,12 @@ def clearance_score(height, target, width=0.01):
     return torch.exp(-(height - target).abs() / width).mean(dim=-1)
 
 
+def clearance_deficit(height, target, swing, peak_height=0.06):
+    """Normalized squared shortfall, only for the foot scheduled to swing."""
+    shortfall = (target - height).clamp(min=0.) / peak_height
+    return (shortfall.square() * swing).sum(dim=-1)
+
+
 def contact_score(contact, stance):
     # Unlike "exactly one contact", the desired side changes with phase.
     return (contact == stance).float().mean(dim=-1)

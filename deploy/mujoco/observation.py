@@ -15,7 +15,7 @@ def build_observation(rotation, linear_world, angular_body, joint_pos, joint_vel
     command = np.asarray(config["command"])
     moving = np.linalg.norm(command[:2]) > .04 or abs(command[2]) > .08
     phase = 2*np.pi*time_s/config["gait_period"]
-    clock = np.array([np.sin(phase), np.cos(phase)]) * moving
+    clock = np.array([np.sin(phase), np.cos(phase)]) * (config["gait_clock_mode"] == "always" or moving)
     action_names = config["action_names"]
     order = [action_names.index(name) for name in config["observation_joint_names"]]
     offset = np.asarray(config["action_offset"])

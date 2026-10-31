@@ -42,7 +42,7 @@ python deploy.py --headless --duration 20 --output outputs/balance_clearance10_5
 | 3:6 | 本体角速度 × 0.25 |
 | 6:9 | 本体重力投影 |
 | 9:12 | 命令，balance 为零 |
-| 12:14 | 步态 sin/cos，balance 为零 |
+| 12:14 | 步态 sin/cos；由策略来源记录选择模式，旧 balance 为零，新 balance 持续运行 |
 | 14:26 | 关节位置减动作零点，按 Isaac 原生关节顺序 |
 | 26:38 | 关节速度 × 0.05，按同一原生顺序 |
 | 38:50 | 上一步裁剪后的动作，按动作顺序 |
@@ -70,7 +70,7 @@ python deploy.py --headless --duration 20 --output outputs/balance_clearance10_5
 
 当前使用 [stationary-v2 站立验收](站立验收条件.md)。model_5990 的 20 秒回放在前向速度、转动角速度、航向偏差、最大位移和水平路径五项上失败；全程直立不能视为原地站稳。新结果保存在 `outputs/balance_clearance10_5990_acceptance_v2_20s.json`，历史结果保留。
 
-最新 model_5990：PT、ONNX 和四个配套配置共 1,615,482 字节，六个 SHA256 与服务器一致。6 项部署检查通过，PT/ONNX 输出一致。MuJoCo 固定初态 20 秒验证直立比例 100%、前脚接触 0、平均绝对前向速度 0.11642 m/s、状态有限；仍有运动，不能将 Isaac 的 0.02075 m/s 直接视为 MuJoCo 效果。输出：`deploy/mujoco/outputs/balance_clearance10_5990_1ms_20s.json`。
+最新 model_5990：PT、ONNX 和四个配套配置共 1,615,482 字节，六个 SHA256 与服务器一致。7 项部署检查通过，PT/ONNX 输出一致。MuJoCo 固定初态 20 秒验证直立比例 100%、前脚接触 0、平均绝对前向速度 0.11642 m/s、状态有限；仍有运动，不能将 Isaac 的 0.02075 m/s 直接视为 MuJoCo 效果。输出：`deploy/mujoco/outputs/balance_clearance10_5990_1ms_20s.json`。
 
 训练配置现已改为 6 cm，但尚未按新高度训练；当前下载策略训练时目标为 2 cm。奖励高度不会在部署时直接修改动作。
 
@@ -79,7 +79,7 @@ cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 conda run -n RL python -B -m unittest test_deployment -v
 ```
 
-六项检查覆盖观测坐标和关节排列、接触力方向与重量、URDF 质量及限位、首步关节限速与位移一致性、PT/ONNX 推理一致性，以及转动验收与失败后停止计分。模型文件是正式部署输入，不依赖测试产物。
+七项检查覆盖观测坐标和关节排列、接触力方向与重量、URDF 质量及限位、首步关节限速与位移一致性、PT/ONNX 推理一致性，以及转动验收与失败后停止计分、新旧相位配置和复位行为。模型文件是正式部署输入，不依赖测试产物。
 
 历史 model_2996 已下载 PT、ONNX 和配套配置，共 1,613,197 字节，六个文件 SHA256 均与服务器一致。部署控制配置与旧策略相同。固定初始状态的 20 秒 MuJoCo 验证中，直立判定比例 100%，前脚触地比例 0，平均绝对前向速度 0.13426 m/s，数值有限；仍有漂移。当前默认物理步长为 1 ms，记录位于 `outputs/balance_sigma001_2996_1ms_20s.json`；此前 5 ms 的记录保留。本结果使用下述既有限速数值近似，不代表两引擎物理等价，也不是多初始状态的稳健性验收。
 
@@ -104,3 +104,9 @@ Isaac 评估记录保留于服务器 `logs/evaluation/stage1_continue_final_1998
 固定初始状态、同一个 model_1998 的 20 秒无界面验证中，限速适配后未再直接倾倒，姿态与高度同时达标比例为 96.5%，前脚触地比例为零；平均绝对前向速度仍为 0.425 m/s，尚未达到原地站稳。约第 18 秒出现短暂下蹲和倾斜，最低高度 0.350 m、最低直立余弦 0.840，随后恢复；不能描述为全程稳定站立。该结果只代表当前初始状态下的一次回放，不是多初始状态的稳健性验收。
 
 修正前的记录保留在 `outputs/balance_continue1998_20s.json`，修正后为 `outputs/balance_continue1998_velocity_limits_20s.json`。服务器的初始状态/运行时参数诊断保存在 `logs/evaluation/sim2sim_exact_initial_1998.*`。MuJoCo 关节属性与积分语义参见 [XML 参考](https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-joint) 和 [数值积分说明](https://mujoco.readthedocs.io/en/stable/computation.html#numerical-integration)。
+
+## 相位观测配置
+
+默认 `gait_clock_mode=auto` 从所选策略同级运行目录的 `params/provenance.json` 读取 `layout.gait_clock`。旧来源文件无该字段时，按历史 `moving_only` 模式和 1.6 s 周期回放；新 balance 使用 `always`。下载新策略时须携带其配套来源文件。缺少来源文件时不猜测模式；自定义策略可通过 `--config` 指定明确的 `always` 或 `moving_only`。实际模式打印在启动日志和输出 JSON 中。
+
+当前 model_5990 自动选择旧模式；20 s 回放与修复前的 1000 个轨迹样本及原有统计字段完全一致，记录于 `outputs/balance_5990_phase_contract_legacy_20s.json`。完整说明见 [相位与欠抬脚接入说明](站立相位观测与欠抬脚惩罚.md)。

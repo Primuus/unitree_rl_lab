@@ -17,6 +17,7 @@ from policy import Policy
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parents[1]))
 from ry_unitree_rl_lab.utils.balance_acceptance import assess_balance
+from ry_unitree_rl_lab.utils.phase_contract import read_gait_clock
 
 
 @contextmanager
@@ -37,6 +38,12 @@ def open_viewer(model, data, key_callback):
 
 class Simulation:
     def __init__(self, config, policy_path):
+        config = dict(config)
+        if config["gait_clock_mode"] == "auto":
+            clock = read_gait_clock(Path(policy_path).resolve().parents[1]/"params/provenance.json")
+            config["gait_clock_mode"], config["gait_period"] = clock["mode"], clock["period_s"]
+        if config["gait_clock_mode"] not in ("always", "moving_only"):
+            raise ValueError("gait_clock_mode must be auto, always or moving_only")
         self.cfg = config
         self.model = load_model(config, ROOT)
         self.data = mujoco.MjData(self.model)
@@ -162,6 +169,7 @@ class Simulation:
             path_speed_mps=path/seconds if seconds else 0.)
         acceptance = assess_balance(values, self.cfg["stage"] == "balance" and not any(self.cfg["command"]))
         return {"simulation_seconds": float(self.data.time), "policy_steps": len(r),
+                "gait_clock_mode": self.cfg["gait_clock_mode"], "gait_period_s": self.cfg["gait_period"],
                 "balance_acceptance_passed": acceptance["passed"], "balance_acceptance": acceptance,
                 "horizontal_path_length_m": path, "max_horizontal_displacement_m": distance,
                 "net_heading_change_rad": float(yaw[-1]-yaw[0]) if valid else 0.,
@@ -200,7 +208,8 @@ def main():
     if not args.headless:
         context = open_viewer(sim.model, sim.data, key)
     print(f"policy={policy}\n56 observations / 12 actions; PD={cfg['kp']}/{cfg['kd']}; "
-          f"control_dt={cfg['physics_dt']*cfg['decimation']}s; mass={sim.model.body_mass.sum():.3f}kg", flush=True)
+          f"control_dt={cfg['physics_dt']*cfg['decimation']}s; mass={sim.model.body_mass.sum():.3f}kg; "
+          f"gait_clock={sim.cfg['gait_clock_mode']}", flush=True)
     start = time.monotonic()
     next_display = start
     next_status = 1.

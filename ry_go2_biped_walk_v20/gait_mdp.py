@@ -7,7 +7,7 @@ from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk import walk_mdp as
 from .reference_config import REFERENCE
 from .reference_rewards import ReferenceRewards
 from .robot_cfg import JOINT_NAMES, FOOT_NAMES
-from .stepping_rewards import step_targets, clearance_score, contact_score
+from .stepping_rewards import step_targets, clearance_score, clearance_deficit, contact_score
 
 
 class RewardState(ReferenceRewards):
@@ -98,14 +98,17 @@ def balance_step_reward(env, name):
     s = state(env)
     target, stance = step_targets(s._get_phase(), env.cfg.balance_step_height,
                                   env.cfg.balance_double_support_fraction)
-    if name == "feet_clearance":
+    if name in ("feet_clearance", "feet_clearance_deficit"):
         data = s.robot.data
         ids = s.contact_foot_indices
         # Original Go2 URDF foot collision: sphere radius .022, local center (-.002,0,0).
         offset = data.body_pos_w[:, ids].new_tensor([-.002, 0., 0.]).expand(env.num_envs, 2, 3)
         center = data.body_pos_w[:, ids] + quat_apply(data.body_quat_w[:, ids], offset)
         height = (center[:, :, 2] - .022 - s.measured_heights.mean(-1, keepdim=True)).clamp(min=0.)
-        value = clearance_score(height, target, env.cfg.balance_clearance_width)
+        if name == "feet_clearance":
+            value = clearance_score(height, target, env.cfg.balance_clearance_width)
+        else:
+            value = clearance_deficit(height, target, ~stance, env.cfg.balance_step_height)
     else:
         contact = s.contact_forces[:, s.contact_foot_indices, 2] > 1.0
         value = contact_score(contact, stance)
@@ -124,6 +127,13 @@ def joint_position_rel(env):
     default = robot.data.joint_pos.new_tensor(
         [REFERENCE["default_joint_angles"][name] for name in robot.joint_names])
     return robot.data.joint_pos - default
+
+
+def gait_clock(env, period=1.6):
+    if env.cfg.stage == "balance" and env.cfg.balance_gait_clock == "always":
+        phase = env.episode_length_buf.to(torch.float32) * env.step_dt * (2 * torch.pi / period)
+        return torch.stack((torch.sin(phase), torch.cos(phase)), dim=-1)
+    return wm.gait_clock(env, period=period)
 
 
 def heading_features(env):
@@ -158,6 +168,7 @@ def validate_layout(env):
     if env.cfg.stage == "balance":
         expected["contact"] = 0.9
         expected["feet_clearance"] = 1.0
+        expected["feet_clearance_deficit"] = -1.0
         expected["foot_slip"] = -0.5
         expected["tracking_ang_vel_zero"] = -0.2
         expected["heading_alignment"] = 1.5
@@ -170,6 +181,8 @@ def validate_layout(env):
             "front_foot_ids": s.feet_name_reward_indices, "hind_foot_ids": s.contact_foot_indices,
             "tracking_lin_vel_sigma": s.cfg.rewards.tracking_lin_vel_sigma,
             "tracking_ang_vel_sigma": s.cfg.rewards.tracking_ang_vel_sigma,
+            "gait_clock": {"mode": env.cfg.balance_gait_clock if env.cfg.stage == "balance" else "moving_only",
+                           "period_s": s.cfg.rewards.cycle_time},
             "balance_yaw_constraints": {
                 "zero_yaw_axis": "world_z", "zero_yaw_weight": -0.2,
                 "zero_command_threshold_radps": 0.1, "zero_yaw_height_gate": 0.78,

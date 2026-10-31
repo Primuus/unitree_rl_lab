@@ -11,6 +11,7 @@
   "robot_mass": 16.087,
   "friction": 1.0,
   "gait_period": 1.6,
+  "gait_clock_mode": "auto",
   "command": [
     0.0,
     0.0,

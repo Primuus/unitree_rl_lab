@@ -39,7 +39,7 @@ class V20ObservationsCfg:
         angular_velocity = ObsTerm(func=mdp.base_ang_vel, scale=0.25, noise=Unoise(n_min=-0.1, n_max=0.1))
         projected_gravity = ObsTerm(func=mdp.projected_gravity, noise=Unoise(n_min=-0.02, n_max=0.02))
         command = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        gait_phase = ObsTerm(func=wm.gait_clock, params={"period": GAIT_PERIOD})
+        gait_phase = ObsTerm(func=gm.gait_clock, params={"period": GAIT_PERIOD})
         joint_pos = ObsTerm(func=gm.joint_position_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, scale=0.05, noise=Unoise(n_min=-0.5, n_max=0.5))
         last_action = ObsTerm(func=mdp.last_action)
@@ -56,7 +56,7 @@ class V20ObservationsCfg:
         angular_velocity = ObsTerm(func=mdp.base_ang_vel, scale=0.25)
         projected_gravity = ObsTerm(func=mdp.projected_gravity)
         command = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        gait_phase = ObsTerm(func=wm.gait_clock, params={"period": GAIT_PERIOD})
+        gait_phase = ObsTerm(func=gm.gait_clock, params={"period": GAIT_PERIOD})
         joint_pos = ObsTerm(func=gm.joint_position_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, scale=0.05)
         last_action = ObsTerm(func=mdp.last_action)
@@ -99,6 +99,8 @@ def configure_stage(cfg, stage):
                     weight=REFERENCE["reward_scales"][name], params={"name": name}))
         cfg.rewards.contact.weight = 0.9
         cfg.rewards.feet_clearance.weight = 1.0
+        cfg.rewards.feet_clearance_deficit = RewTerm(
+            func=gm.balance_step_reward, weight=-1.0, params={"name": "feet_clearance_deficit"})
         cfg.rewards.foot_slip = RewTerm(
             func=wm.feet_slide_l2, weight=-0.5,
             params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS})
@@ -119,6 +121,7 @@ class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     tracking_lin_vel_sigma: float = 0.0025
     tracking_ang_vel_sigma: float = 0.04
     balance_step_height: float = 0.06
+    balance_gait_clock: str = "always"
     balance_double_support_fraction: float = 0.2
     balance_clearance_width: float = 0.01
     scene: ReferenceSceneCfg = ReferenceSceneCfg(num_envs=4096, env_spacing=3.0)
