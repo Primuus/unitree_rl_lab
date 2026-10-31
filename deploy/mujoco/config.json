@@ -1,5 +1,5 @@
 {
-  "policy": "models/stage1_balance_clearance10_5990/exported/policy.pt",
+  "policy": "models/balance_mixed_height_2497/exported/policy.pt",
   "visual_source": "/home/ry/project/quadruped/src/controller/rl/resources/robots/go2",
   "stage": "balance",
   "physics_dt": 0.001,

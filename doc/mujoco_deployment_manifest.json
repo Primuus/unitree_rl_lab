@@ -1,15 +1,15 @@
 {
-  "training_commit": "f434084",
-  "run": "2026-10-31_04-13-39_balance_balance_clearance10_continue500",
-  "checkpoint": "model_5990.pt",
+  "training_commit": "d03f323",
+  "run": "2026-10-31_09-53-03_balance_height_gate_continue500",
+  "checkpoint": "model_2497.pt",
   "stage": "balance",
   "policy_file_sha256": {
-    "params/env.yaml": "24fe499cfb21f8bea98242a2c872d4fae379790ef42a5857d3b12a4f9e7fcfb4",
-    "params/deploy.yaml": "06fae468e249c365a02f99c48b107b83cdc3a8e53e16e86460f86c923b76c231",
-    "params/provenance.json": "5354f061ea23da75089d779d27de5b96cf53ad72aa1950daa793175817529eae",
+    "exported/policy.pt": "579a8b44513f2f3c0afa3ebac3cc929edce527e4c2085e5fc9d5e51a13822e0f",
+    "exported/policy.onnx": "79e5257d6fbd49d94c06ef42602a536d6d2bf885557fbf807278d56b6abcfa64",
+    "params/deploy.yaml": "28c0606c5b6c16f2c688a1864b0bc402d2ead4836a91462cb066b70fa9af3cd6",
+    "params/env.yaml": "8ee5dead3e36bf61cf314e59fa7cf4ebb92a0dea438e64912823e21956e5df50",
     "params/agent.yaml": "e7dccdfd83d9c3c59a2e092b921e2bd6c7fe51209911737d3aed06d879c558a1",
-    "exported/policy.pt": "347f2b6293d81d1b664d602749daf3f80f383b286bb70b9b3dacd1eb62e49721",
-    "exported/policy.onnx": "d70b85b0c21d8fe1fe0b8a41fa4a8d4cec9a3cac2b48458442cd92c3dcc2f502"
+    "params/provenance.json": "79205f185038927062d3723d262b8edf755f3cc4250eb998a02ed2c286bab7da"
   },
   "training_urdf": {
     "origin": "isaac-record:/workspace/unitree_ros/robots/go2_description/urdf/go2_description.urdf",
@@ -26,9 +26,9 @@
     "Visual mesh files remain in the existing local quadruped project.",
     "Models and experimental outputs are excluded from Git."
   ],
-  "checkpoint_sha256": "a24877b49c3f33d3c061f7a57665621f901927b919486b58b739774f4887733d",
-  "local_model_directory": "deploy/mujoco/models/stage1_balance_clearance10_5990",
-  "total_training_iterations": 6000,
+  "checkpoint_sha256": "e5747957b4b62bea2caca6e908e2003fdaca582f817aee3e1f6b2c0dcfc8d940",
+  "local_model_directory": "deploy/mujoco/models/balance_mixed_height_2497",
+  "total_training_iterations": 2500,
   "joint_velocity_limits": {
     "source": "Original URDF limit.velocity; verified against Isaac Lab runtime joint_vel_limits",
     "hip_thigh_rad_s": 30.1,
@@ -44,73 +44,33 @@
     "reason": "5 ms produced 100 Hz front-leg oscillations; 2.5 ms and 1 ms reduced these while preserving the 20 ms policy period",
     "report": "doc/MuJoCo抖动诊断.md"
   },
-  "trained_peak_foot_height_m": 0.02,
-  "pending_training_peak_foot_height_m": 0.06,
+  "trained_peak_foot_height_m": 0.06,
   "latest_mujoco_validation": {
-    "output": "deploy/mujoco/outputs/balance_clearance10_5990_acceptance_v2_20s.json",
+    "output": "deploy/mujoco/outputs/balance_mixed_height_2497_20s.json",
     "simulation_seconds": 20.00000000000146,
     "policy_steps": 1000,
-    "balance_acceptance_passed": false,
-    "balance_acceptance": {
-      "version": "stationary-v2",
-      "thresholds": {
-        "min_valid_seconds": 15.0,
-        "min_upright_fraction_exclusive": 0.95,
-        "max_front_contact_fraction_exclusive": 0.01,
-        "max_forward_error_mps": 0.04,
-        "max_mean_abs_yaw_rate_radps": 0.05,
-        "max_heading_excursion_rad": 0.2617993877991494,
-        "max_horizontal_displacement_m": 0.2,
-        "max_path_speed_mps": 0.04
-      },
-      "values": {
-        "valid_seconds": 20.0,
-        "failures": 0,
-        "upright_fraction": 1.0,
-        "front_contact_fraction": 0.0,
-        "forward_error_mps": 0.1164165684087202,
-        "mean_abs_yaw_rate_radps": 0.9474555072291121,
-        "max_heading_excursion_rad": 5.848791487220968,
-        "max_horizontal_displacement_m": 0.7221778452554436,
-        "path_speed_mps": 0.11796863100560247
-      },
-      "checks": {
-        "trained_balance_policy": true,
-        "valid_duration": true,
-        "no_failure": true,
-        "upright": true,
-        "front_contact": true,
-        "forward_error": false,
-        "yaw_rate": false,
-        "heading_excursion": false,
-        "horizontal_displacement": false,
-        "horizontal_path": false
-      },
-      "failed_checks": [
-        "forward_error",
-        "yaw_rate",
-        "heading_excursion",
-        "horizontal_displacement",
-        "horizontal_path"
-      ],
-      "passed": false
-    },
-    "horizontal_path_length_m": 2.3593726201120493,
-    "max_horizontal_displacement_m": 0.7221778452554436,
-    "net_heading_change_rad": 5.791390948213595,
-    "max_heading_excursion_rad": 5.848791487220968,
-    "absolute_heading_travel_rad": 23.095225587717465,
-    "joint_velocity_limit_mode": "project_velocity_and_position",
-    "velocity_limit_applications": 304,
-    "upright_fraction": 1.0,
-    "front_contact_fraction": 0.0,
-    "mean_abs_forward_speed": 0.1164165684087202,
-    "final_position": [
-      -0.16546677819167413,
-      0.1172690711857461,
-      0.4974004503966436
-    ],
     "finite": true,
-    "scope": "One fixed initial state; existing numerical velocity-limit approximation retained; stationary-v2 acceptance fails"
-  }
+    "gait_clock_mode": "always",
+    "balance_acceptance_passed": false,
+    "failures": 0,
+    "upright_fraction": 0.024,
+    "front_contact_fraction": 0.0,
+    "mean_abs_forward_speed": 0.054037872671702646,
+    "mean_abs_yaw_rate_radps": 0.5009480374116797,
+    "max_horizontal_displacement_m": 0.9765922662769432,
+    "failed_checks": [
+      "upright",
+      "forward_error",
+      "yaw_rate",
+      "horizontal_displacement",
+      "horizontal_path"
+    ],
+    "deployment_tests_passed": 7
+  },
+  "download_bytes": 1618058,
+  "gait_clock": {
+    "mode": "always",
+    "period_s": 1.6
+  },
+  "export_verification": "Every exported TorchScript actor tensor exactly equals model_2497 checkpoint actor; six local/remote file hashes match; PT/ONNX inference consistency test passed."
 }

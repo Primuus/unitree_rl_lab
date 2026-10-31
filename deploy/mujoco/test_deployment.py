@@ -101,7 +101,8 @@ class DeploymentTests(unittest.TestCase):
             self.assertEqual(read_gait_clock(path), {'mode':'moving_only','period_s':1.6})
             path.write_text(json.dumps({'layout':{'gait_clock':{'mode':'always','period_s':1.6}}}))
             self.assertEqual(read_gait_clock(path), {'mode':'always','period_s':1.6})
-        sim = Simulation(CFG, ROOT/CFG['policy'])
+        with patch('deploy.read_gait_clock', return_value={'mode':'moving_only','period_s':1.6}):
+            sim = Simulation(CFG, ROOT/CFG['policy'])
         self.assertEqual(sim.cfg['gait_clock_mode'], 'moving_only')
         self.assertEqual(CFG['gait_clock_mode'], 'auto')
         np.testing.assert_array_equal(sim.observation()[12:14], [0.,0.])

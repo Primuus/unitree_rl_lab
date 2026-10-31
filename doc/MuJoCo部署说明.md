@@ -9,20 +9,36 @@ cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 ./run.sh
 ```
 
-默认加载最新 model_5990 的 TorchScript 策略（站立线速度奖励分母 0.0025，抬脚权重 1.0、训练目标高度 2 cm），平地、零速度命令，从后腿直立附近开始。按 `R` 重置，空格暂停/继续；关闭窗口或 Ctrl+C 退出。窗口按 60 Hz 同步，仿真尽量以实时速度运行。倒下后继续显示实际状态，不自动重置或关闭电机。
+默认加载已选定的 model_2497 的 TorchScript 策略（混合命令训练、抬脚目标6cm、持续相位观测），平地、零速度命令，从后腿直立附近开始。按 `R` 重置，空格暂停/继续；关闭窗口或 Ctrl+C 退出。窗口按 60 Hz 同步，仿真尽量以实时速度运行。倒下后继续显示实际状态，不自动重置或关闭电机。
 
 也可在已激活的环境中运行：
 
 ```bash
 conda activate RL
 python deploy.py
-python deploy.py --policy models/stage1_balance_clearance10_5990/exported/policy.onnx
-python deploy.py --headless --duration 20 --output outputs/balance_clearance10_5990_1ms_20s.json
+python deploy.py --policy models/balance_mixed_height_2497/exported/policy.onnx
+python deploy.py --headless --duration 20 --output outputs/balance_mixed_height_2497_20s.json
 ```
 
 `--duration 0` 表示持续运行；`--headless` 不限制到实时速度。输出 JSON 包含统计和每个策略步的轨迹，重置后重新统计。`--config` 可指定部署 JSON 配置；相对策略路径相对于部署代码目录。
 
-## 策略和本地依赖
+
+## 当前选定策略：model_2497
+
+2026-10-31，用户弃用续训750轮的全部策略结果后，将model_2497导出文件下载到本机并设为默认；没有下载或启用model_3246。
+
+- 服务器训练目录：logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_09-53-03_balance_height_gate_continue500。
+- 本地目录：deploy/mujoco/models/balance_mixed_height_2497/。
+- PT、ONNX及四份配置共1,618,058字节，六个SHA256均与服务器一致；TorchScript全部Actor参数与checkpoint完全相同。
+- 训练时50%零命令、50%前进0.05～0.10m/s；本地默认零命令。Actor56、动作12、相位always、周期1.6s、抬脚目标6cm。
+- 动作顺序、观测关节顺序、动作零点、初始姿态、PD和控制周期与保存配置核对；采用env.yaml中的精确数值，deploy.yaml部分浮点值有格式化舍入。
+- 继续使用既有MuJoCo 1ms物理步长和关节限速近似。
+- 本机RL环境7项部署测试通过，包含PT/ONNX输出一致性；旧相位测试改为显式模拟旧来源，不再假定默认策略一定为旧相位。
+- 20秒固定初态回放：状态有限、无基座接触失败、无前脚触地，平均绝对前向速度0.05404m/s、平均绝对世界Z角速度0.50095rad/s、最大水平位移0.97659m。姿态与高度同时达标比例2.4%，主要表现为约0.42m的低姿态，站立验收未通过。
+- 结果：deploy/mujoco/outputs/balance_mixed_height_2497_20s.json。此验证确认部署链路可运行，不代表已经解决sim2sim差异或站稳。
+- 权重、配套下载配置及回放数据不提交Git，旧模型全部保留。下文model_5990/2996等记录为历史对照。
+
+## 历史model_5990与本地依赖
 
 - 对应训练代码本地提交：`f434084`（未推送 GitHub）。
 - 训练目录：`2026-10-31_04-13-39_balance_balance_clearance10_continue500`。
@@ -66,13 +82,13 @@ python deploy.py --headless --duration 20 --output outputs/balance_clearance10_5
 
 接触力使用 `mj_contactForce`，从接触坐标转换到世界坐标，并按 geom1/geom2 分别累加负/正作用力。依据 [MuJoCo 接触力说明](https://mujoco.readthedocs.io/en/latest/programming/simulation.html)。
 
-## 验证与当前效果
+## 历史策略验证记录
 
-当前使用 [stationary-v2 站立验收](站立验收条件.md)。model_5990 的 20 秒回放在前向速度、转动角速度、航向偏差、最大位移和水平路径五项上失败；全程直立不能视为原地站稳。新结果保存在 `outputs/balance_clearance10_5990_acceptance_v2_20s.json`，历史结果保留。
+历史结果使用 [stationary-v2 站立验收](站立验收条件.md)。model_5990 的 20 秒回放在前向速度、转动角速度、航向偏差、最大位移和水平路径五项上失败；全程直立不能视为原地站稳。新结果保存在 `outputs/balance_clearance10_5990_acceptance_v2_20s.json`，历史结果保留。
 
-最新 model_5990：PT、ONNX 和四个配套配置共 1,615,482 字节，六个 SHA256 与服务器一致。7 项部署检查通过，PT/ONNX 输出一致。MuJoCo 固定初态 20 秒验证直立比例 100%、前脚接触 0、平均绝对前向速度 0.11642 m/s、状态有限；仍有运动，不能将 Isaac 的 0.02075 m/s 直接视为 MuJoCo 效果。输出：`deploy/mujoco/outputs/balance_clearance10_5990_1ms_20s.json`。
+历史 model_5990：PT、ONNX 和四个配套配置共 1,615,482 字节，六个 SHA256 与服务器一致。7 项部署检查通过，PT/ONNX 输出一致。MuJoCo 固定初态 20 秒验证直立比例 100%、前脚接触 0、平均绝对前向速度 0.11642 m/s、状态有限；仍有运动，不能将 Isaac 的 0.02075 m/s 直接视为 MuJoCo 效果。输出：`deploy/mujoco/outputs/balance_clearance10_5990_1ms_20s.json`。
 
-训练配置现已改为 6 cm，但尚未按新高度训练；当前下载策略训练时目标为 2 cm。奖励高度不会在部署时直接修改动作。
+该历史model_5990训练时目标为2cm；当前默认model_2497已按6cm训练。奖励高度不会在部署时直接修改动作。
 
 ```bash
 cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
@@ -109,4 +125,4 @@ Isaac 评估记录保留于服务器 `logs/evaluation/stage1_continue_final_1998
 
 默认 `gait_clock_mode=auto` 从所选策略同级运行目录的 `params/provenance.json` 读取 `layout.gait_clock`。旧来源文件无该字段时，按历史 `moving_only` 模式和 1.6 s 周期回放；新 balance 使用 `always`。下载新策略时须携带其配套来源文件。缺少来源文件时不猜测模式；自定义策略可通过 `--config` 指定明确的 `always` 或 `moving_only`。实际模式打印在启动日志和输出 JSON 中。
 
-当前 model_5990 自动选择旧模式；20 s 回放与修复前的 1000 个轨迹样本及原有统计字段完全一致，记录于 `outputs/balance_5990_phase_contract_legacy_20s.json`。完整说明见 [相位与欠抬脚接入说明](站立相位观测与欠抬脚惩罚.md)。
+历史 model_5990 自动选择旧模式；20 s 回放与修复前的 1000 个轨迹样本及原有统计字段完全一致，记录于 `outputs/balance_5990_phase_contract_legacy_20s.json`。完整说明见 [相位与欠抬脚接入说明](站立相位观测与欠抬脚惩罚.md)。
