@@ -328,8 +328,11 @@ class ReferencePortTests(unittest.TestCase):
         torch.testing.assert_close(height[[2, 6]], torch.tensor([[.06, 0.], [0., .06]]))
         self.assertTrue(stance[[0, 1, 3, 4, 5, 7]].all())
         self.assertTrue(stance.any(-1).all())
-        torch.testing.assert_close(stepping.clearance_score(height, height), torch.ones(8))
-        self.assertTrue((stepping.clearance_score(torch.zeros_like(height), height)[[2, 6]] < .6).all())
+        loads = stance.float()
+        ideal = stepping.clearance_score(height, height, ~stance, loads)
+        self.assertTrue((ideal[[2, 6]] > .95).all())
+        torch.testing.assert_close(ideal[[0, 1, 3, 4, 5, 7]], torch.zeros(6))
+        self.assertTrue((stepping.clearance_score(torch.zeros_like(height), height, ~stance, loads)[[2, 6]] < .003).all())
         torch.testing.assert_close(stepping.contact_score(stance, stance), torch.ones(8))
         # Keeping only one leg on the ground cannot satisfy both swing phases.
         fixed_right = torch.tensor([[False, True]]).expand(8, 2)
@@ -371,18 +374,37 @@ class ReferencePortTests(unittest.TestCase):
         namespace = {'state':lambda _:s,'step_targets':stepping.step_targets,
                      'clearance_score':stepping.clearance_score,'clearance_deficit':stepping.clearance_deficit,
                      'contact_score':stepping.contact_score,'body_height_factor':stepping.body_height_factor,
-                     'quat_apply':lambda quat,offset:offset}
+                     'ROBOT_WEIGHT':10., 'quat_apply':lambda quat,offset:offset}
         exec(compile(ast.Module(body=[fn],type_ignores=[]),str(path),'exec'),namespace)
         env = SimpleNamespace(num_envs=3,cfg=SimpleNamespace(balance_step_height=.06,balance_double_support_fraction=.2,
                                                    balance_clearance_width=.01, step_reward_height_low=.43,
                                                    step_reward_height_full=.50, step_reward_height_min_factor=.3))
         torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance_deficit'),
                                    torch.tensor([1.,.25,1.]))
-        expected = torch.tensor([(1.+torch.exp(torch.tensor(-6.)))/2,
-                                 (1.+torch.exp(torch.tensor(-3.)))/2,0.])
-        torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance'),expected*torch.tensor([.3,.6,1.]))
+        load_gate = torch.sigmoid(torch.tensor(3.)) * torch.sigmoid(torch.tensor(7.8))
+        expected = torch.tensor([torch.exp(torch.tensor(-6.)), torch.exp(torch.tensor(-3.)), 0.])
+        torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance'),
+                                   expected * load_gate * torch.tensor([.3,.6,1.]))
         torch.testing.assert_close(namespace['balance_step_reward'](env,'contact'),
                                    torch.tensor([.3,.6,0.]))
+
+    def test_swing_clearance_requires_load_transfer_and_ignores_support_height(self):
+        target = torch.tensor([[.06, 0.]]).expand(5, 2)
+        swing = torch.tensor([[True, False]]).expand(5, 2)
+        loads = torch.tensor([[0., 1.], [.5, .5], [0., 0.], [.15, .35], [-1., 3.]])
+        score = stepping.clearance_score(target, target, swing, loads)
+        self.assertGreater(float(score[0]), .95)
+        self.assertLess(float(score[1]), .001)
+        self.assertLess(float(score[2]), .015)
+        self.assertAlmostEqual(float(score[3]), .25, places=6)
+        changed_support = target.clone()
+        changed_support[:, 1] = .2
+        torch.testing.assert_close(stepping.clearance_score(changed_support, target, swing, loads), score)
+        torch.testing.assert_close(stepping.clearance_score(target.flip(-1), target.flip(-1),
+                                   swing.flip(-1), loads.flip(-1)), score)
+        torch.testing.assert_close(stepping.clearance_score(target, target, torch.zeros_like(swing), loads),
+                                   torch.zeros(5))
+        self.assertTrue(torch.isfinite(score).all())
 
     def test_step_height_factor_endpoints_monotonicity_and_batch_independence(self):
         height = torch.tensor([.3, .425, .43, .445, .46, .48, .5, .6])

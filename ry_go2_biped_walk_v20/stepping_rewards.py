@@ -13,9 +13,13 @@ def step_targets(phase, peak_height=0.06, double_support_fraction=0.2):
     return height, ~swing
 
 
-def clearance_score(height, target, width=0.01):
-    # Preserve the exponential absolute-error form and the configured error width.
-    return torch.exp(-(height - target).abs() / width).mean(dim=-1)
+def clearance_score(height, target, swing, loads, width=0.01):
+    """Original V36 load gates, applied only to the scheduled swing foot."""
+    loads = loads.clamp(0.0, 2.0)
+    unload_gate = torch.sigmoid((0.15 - loads) * 20.0)
+    support_gate = torch.sigmoid((loads.flip(-1) - 0.35) * 12.0)
+    score = torch.exp(-(height - target).abs() / width)
+    return (score * swing * unload_gate * support_gate).sum(dim=-1)
 
 
 def clearance_deficit(height, target, swing, peak_height=0.06):

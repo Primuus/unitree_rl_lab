@@ -6,7 +6,7 @@ from isaaclab.utils.math import euler_xyz_from_quat, quat_apply
 from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk import walk_mdp as wm
 from .reference_config import REFERENCE
 from .reference_rewards import ReferenceRewards
-from .robot_cfg import JOINT_NAMES, FOOT_NAMES
+from .robot_cfg import JOINT_NAMES, FOOT_NAMES, ROBOT_WEIGHT
 from .stepping_rewards import step_targets, clearance_score, clearance_deficit, contact_score, body_height_factor
 
 
@@ -108,7 +108,8 @@ def balance_step_reward(env, name):
         center = data.body_pos_w[:, ids] + quat_apply(data.body_quat_w[:, ids], offset)
         height = (center[:, :, 2] - .022 - s.measured_heights.mean(-1, keepdim=True)).clamp(min=0.)
         if name == "feet_clearance":
-            value = clearance_score(height, target, env.cfg.balance_clearance_width)
+            loads = s.contact_forces[:, ids, 2].clamp(min=0.) / ROBOT_WEIGHT
+            value = clearance_score(height, target, ~stance, loads, env.cfg.balance_clearance_width)
         else:
             value = clearance_deficit(height, target, ~stance, env.cfg.balance_step_height)
     else:
@@ -224,4 +225,8 @@ def validate_layout(env):
             "balance_stepping": {"peak_height": env.cfg.balance_step_height,
                                  "double_support_fraction": env.cfg.balance_double_support_fraction,
                                  "clearance_width": env.cfg.balance_clearance_width,
+                    "clearance_mode": "swing_only_load_gated",
+                    "load_normalization_weight_n": ROBOT_WEIGHT,
+                    "unload_gate": "sigmoid((0.15-load)*20)",
+                    "support_gate": "sigmoid((opposite_load-0.35)*12)",
                                  "cycle_time": s.cfg.rewards.cycle_time}}
