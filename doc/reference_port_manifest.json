@@ -180,7 +180,7 @@
       "contact": 0.3
     },
     "cycle_time_s": 1.6,
-    "peak_height_m": 0.02,
+    "peak_height_m": 0.06,
     "double_support_fraction": 0.2,
     "clearance_width_m": 0.01,
     "clearance_formula": "mean(exp(-abs(sole_height-target_height)/0.01)) * height_gate",
@@ -201,7 +201,7 @@
       0,
       0
     ],
-    "notes": "User-approved small-step adaptation, not unchanged upstream formulas. User subsequently sets balance contact=0.9 and feet_clearance=1.0; original walk rewards preserved.",
+    "notes": "User-approved small-step adaptation, not unchanged upstream formulas. User subsequently sets balance contact=0.9 and feet_clearance=1.0; original walk rewards preserved. After round8 evaluation, user sets peak height to 0.06 m; model_5990 was trained at 0.02 m, and the 0.06 m configuration has not been trained.",
     "active_weights": {
       "feet_clearance": 1.0,
       "contact": 0.9

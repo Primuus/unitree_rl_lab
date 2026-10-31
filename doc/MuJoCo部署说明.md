@@ -9,25 +9,25 @@ cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 ./run.sh
 ```
 
-默认加载最新 model_2996 的 TorchScript 策略（站立线速度奖励分母 0.01），平地、零速度命令，从后腿直立附近开始。按 `R` 重置，空格暂停/继续；关闭窗口或 Ctrl+C 退出。窗口按 60 Hz 同步，仿真尽量以实时速度运行。倒下后继续显示实际状态，不自动重置或关闭电机。
+默认加载最新 model_5990 的 TorchScript 策略（站立线速度奖励分母 0.0025，抬脚权重 1.0、训练目标高度 2 cm），平地、零速度命令，从后腿直立附近开始。按 `R` 重置，空格暂停/继续；关闭窗口或 Ctrl+C 退出。窗口按 60 Hz 同步，仿真尽量以实时速度运行。倒下后继续显示实际状态，不自动重置或关闭电机。
 
 也可在已激活的环境中运行：
 
 ```bash
 conda activate RL
 python deploy.py
-python deploy.py --policy models/stage1_balance_sigma001_2996/exported/policy.onnx
-python deploy.py --headless --duration 20 --output outputs/balance_sigma001_2996_1ms_20s.json
+python deploy.py --policy models/stage1_balance_clearance10_5990/exported/policy.onnx
+python deploy.py --headless --duration 20 --output outputs/balance_clearance10_5990_1ms_20s.json
 ```
 
 `--duration 0` 表示持续运行；`--headless` 不限制到实时速度。输出 JSON 包含统计和每个策略步的轨迹，重置后重新统计。`--config` 可指定部署 JSON 配置；相对策略路径相对于部署代码目录。
 
 ## 策略和本地依赖
 
-- 对应训练代码本地提交：`afb2fdd467495aac0170ef6517ed2367b413e5c9`（未推送 GitHub）。
-- 训练目录：`2026-10-30_14-40-31_balance_balance_sigma001_continue500`。
-- checkpoint：`model_2996.pt`，累计 3000 次更新（恢复时迭代标签有重叠）；导出文件为 `policy.pt` 和 `policy.onnx`。
-- 部署文件保存在 `deploy/mujoco/models/stage1_balance_sigma001_2996/`，包括 `exported/` 和 `params/`，不提交 Git。
+- 对应训练代码本地提交：`f434084`（未推送 GitHub）。
+- 训练目录：`2026-10-31_04-13-39_balance_balance_clearance10_continue500`。
+- checkpoint：`model_5990.pt`，累计 6000 次更新（恢复时迭代标签有重叠）；导出文件为 `policy.pt` 和 `policy.onnx`。
+- 部署文件保存在 `deploy/mujoco/models/stage1_balance_clearance10_5990/`，包括 `exported/` 和 `params/`，不提交 Git。
 - 使用 `/home/ry/miniconda3/envs/RL`；验证版本为 Python 3.13.13、MuJoCo 3.8.1、PyTorch 2.12.0+cpu、ONNX Runtime 1.27.0。
 - 视觉资源复用 `/home/ry/project/quadruped/src/controller/rl/resources/robots/go2/go2.xml` 和 `obj/`，由 `config.json` 的 `visual_source` 指定。不修改该工程，不复制或传输其约 28 MB 网格。
 - 策略来源、文件哈希和机器人资源来源见 [来源清单](mujoco_deployment_manifest.json)。新机器需要提供这些本地依赖；从 Git 拉取代码不会自动下载模型和网格。
@@ -68,6 +68,10 @@ python deploy.py --headless --duration 20 --output outputs/balance_sigma001_2996
 
 ## 验证与当前效果
 
+最新 model_5990：PT、ONNX 和四个配套配置共 1,615,482 字节，六个 SHA256 与服务器一致。5 项部署检查通过，PT/ONNX 输出一致。MuJoCo 固定初态 20 秒验证直立比例 100%、前脚接触 0、平均绝对前向速度 0.11642 m/s、状态有限；仍有运动，不能将 Isaac 的 0.02075 m/s 直接视为 MuJoCo 效果。输出：`deploy/mujoco/outputs/balance_clearance10_5990_1ms_20s.json`。
+
+训练配置现已改为 6 cm，但尚未按新高度训练；当前下载策略训练时目标为 2 cm。奖励高度不会在部署时直接修改动作。
+
 ```bash
 cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 conda run -n RL python -B -m unittest test_deployment -v
@@ -75,7 +79,7 @@ conda run -n RL python -B -m unittest test_deployment -v
 
 五项检查覆盖观测坐标和关节排列、接触力方向与重量、URDF 质量及限位、首步关节限速与位移一致性、PT/ONNX 推理一致性。模型文件是正式部署输入，不依赖测试产物。
 
-最新 model_2996 已下载 PT、ONNX 和配套配置，共 1,613,197 字节，六个文件 SHA256 均与服务器一致。部署控制配置与旧策略相同。固定初始状态的 20 秒 MuJoCo 验证中，直立判定比例 100%，前脚触地比例 0，平均绝对前向速度 0.13426 m/s，数值有限；仍有漂移。当前默认物理步长为 1 ms，记录位于 `outputs/balance_sigma001_2996_1ms_20s.json`；此前 5 ms 的记录保留。本结果使用下述既有限速数值近似，不代表两引擎物理等价，也不是多初始状态的稳健性验收。
+历史 model_2996 已下载 PT、ONNX 和配套配置，共 1,613,197 字节，六个文件 SHA256 均与服务器一致。部署控制配置与旧策略相同。固定初始状态的 20 秒 MuJoCo 验证中，直立判定比例 100%，前脚触地比例 0，平均绝对前向速度 0.13426 m/s，数值有限；仍有漂移。当前默认物理步长为 1 ms，记录位于 `outputs/balance_sigma001_2996_1ms_20s.json`；此前 5 ms 的记录保留。本结果使用下述既有限速数值近似，不代表两引擎物理等价，也不是多初始状态的稳健性验收。
 
 历史 model_1998：补齐限速前，该策略在 MuJoCo 的 20 秒无界面运行中数值有限，但约 2 秒内倒下，姿态与高度同时达标比例为 3.8%，前脚触地比例为 17.6%。同一 checkpoint 在 Isaac Lab 的 4 环境、20 秒独立评估中平均高度为 0.505 m，姿态与高度同时达标比例为 95.3%，速度误差约 0.216 m/s，无摔倒，但平衡验收仍未通过。MuJoCo 中的倾倒比 Isaac 明显，说明跨仿真的表现差异仍未解决；部署链路可运行不代表 sim2sim 成功。
 

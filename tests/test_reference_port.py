@@ -207,7 +207,7 @@ class ReferencePortTests(unittest.TestCase):
     def test_small_steps_alternate_with_double_support_and_no_flight_target(self):
         phase = torch.tensor([0., .025, .25, .475, .5, .525, .75, .975])
         height, stance = stepping.step_targets(phase)
-        torch.testing.assert_close(height[[2, 6]], torch.tensor([[.02, 0.], [0., .02]]))
+        torch.testing.assert_close(height[[2, 6]], torch.tensor([[.06, 0.], [0., .06]]))
         self.assertTrue(stance[[0, 1, 3, 4, 5, 7]].all())
         self.assertTrue(stance.any(-1).all())
         torch.testing.assert_close(stepping.clearance_score(height, height), torch.ones(8))

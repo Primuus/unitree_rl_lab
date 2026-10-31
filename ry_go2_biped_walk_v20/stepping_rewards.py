@@ -2,7 +2,7 @@
 import torch
 
 
-def step_targets(phase, peak_height=0.02, double_support_fraction=0.2):
+def step_targets(phase, peak_height=0.06, double_support_fraction=0.2):
     """RL swings first; each half-cycle begins and ends with double support."""
     local = (phase[:, None] - phase.new_tensor([0.0, 0.5])) % 1.0
     margin = double_support_fraction / 4.0
@@ -14,7 +14,7 @@ def step_targets(phase, peak_height=0.02, double_support_fraction=0.2):
 
 
 def clearance_score(height, target, width=0.01):
-    # Preserve the reference exponential absolute-error form, scaled for 2 cm steps.
+    # Preserve the exponential absolute-error form and the configured error width.
     return torch.exp(-(height - target).abs() / width).mean(dim=-1)
 
 

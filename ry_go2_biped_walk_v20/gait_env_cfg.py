@@ -113,7 +113,7 @@ class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     stage: str = "balance"
     tracking_lin_vel_sigma: float = 0.0025
     tracking_ang_vel_sigma: float = 0.04
-    balance_step_height: float = 0.02
+    balance_step_height: float = 0.06
     balance_double_support_fraction: float = 0.2
     balance_clearance_width: float = 0.01
     scene: ReferenceSceneCfg = ReferenceSceneCfg(num_envs=4096, env_spacing=3.0)
