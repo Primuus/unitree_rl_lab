@@ -4,7 +4,8 @@ import numpy as np
 
 
 class Policy:
-    def __init__(self, path):
+    def __init__(self, path, observation_dim=56, action_dim=12):
+        self.observation_dim, self.action_dim = observation_dim, action_dim
         path = Path(path)
         self.onnx = path.suffix == ".onnx"
         if self.onnx:
@@ -19,16 +20,16 @@ class Policy:
             import torch
             torch.set_num_threads(1)
             self.model = torch.jit.load(str(path), map_location="cpu").eval()
-        self(np.zeros(56, dtype=np.float32))
+        self(np.zeros(self.observation_dim, dtype=np.float32))
 
     def __call__(self, obs):
-        obs = np.asarray(obs, dtype=np.float32).reshape(1, 56)
+        obs = np.asarray(obs, dtype=np.float32).reshape(1, self.observation_dim)
         if self.onnx:
             action = self.session.run(None, {self.input_name: obs})[0]
         else:
             import torch
             with torch.inference_mode():
                 action = self.model(torch.from_numpy(obs)).numpy()
-        if action.shape != (1, 12) or not np.isfinite(action).all():
-            raise ValueError("Policy must return finite float32 [1, 12] actions")
+        if action.shape != (1, self.action_dim) or not np.isfinite(action).all():
+            raise ValueError(f"Policy must return finite [1, {self.action_dim}] actions")
         return action[0]

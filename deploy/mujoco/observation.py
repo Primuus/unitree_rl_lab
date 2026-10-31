@@ -1,4 +1,4 @@
-"""The exact 56-value actor layout; joint state order differs from action order."""
+"""Named actor layouts for the current and original policies; joint state order differs from action order."""
 import numpy as np
 
 
@@ -19,13 +19,19 @@ def build_observation(rotation, linear_world, angular_body, joint_pos, joint_vel
     action_names = config["action_names"]
     order = [action_names.index(name) for name in config["observation_joint_names"]]
     offset = np.asarray(config["action_offset"])
-    observation = np.concatenate((
-        [c*vx+s*vy, -s*vx+c*vy, vz],
-        angular_body*.25, rotation.T @ np.array([0., 0., -1.]),
-        command, clock, (joint_pos-offset)[order], joint_vel[order]*.05,
-        last_action, [s, c], np.clip((rear_height-rear_height.min())*10, 0, 1),
-        np.clip(np.maximum(rear_force_z, 0)/(config["robot_mass"]*9.81), 0, 1.5),
-    )).astype(np.float32)
-    if observation.shape != (56,) or not np.isfinite(observation).all():
-        raise ValueError("Invalid 56-dimensional actor observation")
+    terms = {
+        "linear_velocity": [c*vx+s*vy, -s*vx+c*vy, vz],
+        "angular_velocity": angular_body*.25,
+        "projected_gravity": rotation.T @ np.array([0., 0., -1.]),
+        "command": command, "gait_phase": clock,
+        "joint_pos": (joint_pos-offset)[order], "joint_vel": joint_vel[order]*.05,
+        "last_action": last_action, "heading": [s, c],
+        "foot_height": np.clip((rear_height-rear_height.min())*10, 0, 1),
+        "foot_load": np.clip(np.maximum(rear_force_z, 0)/(config["robot_mass"]*9.81), 0, 1.5),
+    }
+    names = config.get("observation_terms", list(terms))
+    observation = np.concatenate([np.asarray(terms[name]) for name in names]).astype(np.float32)
+    expected = config.get("observation_dim", 56)
+    if observation.shape != (expected,) or not np.isfinite(observation).all():
+        raise ValueError(f"Invalid {expected}-dimensional actor observation")
     return observation

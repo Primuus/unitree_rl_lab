@@ -47,19 +47,19 @@ class Simulation:
         self.cfg = config
         self.model = load_model(config, ROOT)
         self.data = mujoco.MjData(self.model)
-        self.policy = Policy(policy_path)
+        self.policy = Policy(policy_path, config.get("observation_dim", 56), len(config["action_names"]))
         self.base = self.model.body("base").id
         names = config["action_names"]
         self.jids = np.array([self.model.joint(n).id for n in names])
         self.qids = np.array([self.model.joint(n).qposadr[0] for n in names])
         self.vids = np.array([self.model.joint(n).dofadr[0] for n in names])
-        self.velocity_limits = self.model.jnt_user[self.jids, 0]
+        self.velocity_limits = np.asarray(config.get("joint_velocity_limits", self.model.jnt_user[self.jids, 0]))
         self.aids = np.array([self.model.actuator(n).id for n in names])
         self.feet = [self.model.site(n+"_foot").id for n in ["FL", "FR", "RL", "RR"]]
         self.foot_geoms = {self.model.geom(n+"_foot_collision_0").id: i
                            for i, n in enumerate(["FL", "FR", "RL", "RR"])}
         self.contact_force = np.zeros(6)
-        self.last_action = np.zeros(12, dtype=np.float32)
+        self.last_action = np.zeros(len(names), dtype=np.float32)
         self.reset()
 
     def reset(self):
@@ -94,6 +94,10 @@ class Simulation:
         # BODY velocity is centered at the body's COM, as Isaac Lab root_lin_vel_w.
         mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY,
                                 self.base, velocity, 0)
+        if "observation_com" in self.cfg:
+            # Keep the observation point at the training merged-base COM.
+            offset = rotation @ (np.asarray(self.cfg["observation_com"])-self.model.body_ipos[self.base])
+            velocity[3:] += np.cross(velocity[:3], offset)
         return build_observation(
             rotation, velocity[3:], rotation.T @ velocity[:3],
             self.data.qpos[self.qids], self.data.qvel[self.vids], self.last_action,
@@ -116,8 +120,12 @@ class Simulation:
         if self.steps % self.cfg["decimation"] == 0:
             obs = self.observation()
             clip = self.cfg["clip_actions"]
-            self.last_action = np.clip(self.policy(obs), -clip, clip)
+            action = self.policy(obs)
+            self.last_action = np.clip(action, -clip, clip) if clip is not None else action
             self.target = np.asarray(self.cfg["action_offset"]) + self.cfg["action_scale"]*self.last_action
+            if "action_target_limits" in self.cfg:
+                bounds = np.asarray(self.cfg["action_target_limits"])
+                self.target = np.clip(self.target, bounds[:, 0], bounds[:, 1])
             velocity = np.zeros(6)
             mujoco.mj_objectVelocity(self.model, self.data, mujoco.mjtObj.mjOBJ_BODY,
                                     self.base, velocity, 0)
@@ -128,9 +136,16 @@ class Simulation:
                                  "heading_yaw_rad": float(heading(self.data.xmat[self.base].reshape(3, 3))),
                                  "yaw_rate_world_radps": float(velocity[2]),
                                  "base_contact": self.base_contact(),
-                                 "rear_load": obs[54:56].tolist(),
+                                 "rear_load": np.clip(self.forces()[2:, 2]/(self.cfg["robot_mass"]*9.81), 0, 1.5).tolist(),
                                  "front_contact": bool((np.linalg.norm(self.forces()[:2], axis=1)>1).any())})
         torque = (self.target-self.data.qpos[self.qids])*self.cfg["kp"] - self.data.qvel[self.vids]*self.cfg["kd"]
+        if "actuator_curve" in self.cfg:
+            curve = self.cfg["actuator_curve"]
+            velocity = self.data.qvel[self.vids]
+            peak = np.where(velocity*torque > 0, curve["Y1"], curve["Y2"])
+            limit = peak * np.clip((curve["X2"]-np.abs(velocity))/(curve["X2"]-curve["X1"]), 0, 1)
+            torque = np.clip(torque, -limit, limit)
+            torque -= curve["Fs"]*np.tanh(velocity/curve["Va"]) + curve["Fd"]*velocity
         limits = self.model.actuator_ctrlrange[self.aids]
         self.data.ctrl[self.aids] = np.clip(torque, limits[:, 0], limits[:, 1])
         mujoco.mj_step(self.model, self.data)
@@ -151,8 +166,10 @@ class Simulation:
     def result(self):
         r = self.records
         upright = [v["upright_cos"] > .94 and v["position"][2] > .43 for v in r]
-        # Viewer continues after failure, but acceptance stops at the first base contact.
-        failure = next((i for i, v in enumerate(r) if v["base_contact"]), len(r))
+        # Viewer continues after failure; original profiles also enforce height/tilt limits.
+        failure = next((i for i, v in enumerate(r) if v["base_contact"]
+                        or v["position"][2] < self.cfg.get("min_base_height", -np.inf)
+                        or v["upright_cos"] < self.cfg.get("min_upright_cos", -np.inf)), len(r))
         valid = r[:failure]
         seconds = min(len(valid)*self.cfg["physics_dt"]*self.cfg["decimation"], float(self.data.time))
         yaw = np.unwrap([v["heading_yaw_rad"] for v in valid])
@@ -207,7 +224,7 @@ def main():
     context = nullcontext(None)
     if not args.headless:
         context = open_viewer(sim.model, sim.data, key)
-    print(f"policy={policy}\n56 observations / 12 actions; PD={cfg['kp']}/{cfg['kd']}; "
+    print(f"policy={policy}\n{sim.policy.observation_dim} observations / {len(cfg['action_names'])} actions; PD={cfg['kp']}/{cfg['kd']}; "
           f"control_dt={cfg['physics_dt']*cfg['decimation']}s; mass={sim.model.body_mass.sum():.3f}kg; "
           f"gait_clock={sim.cfg['gait_clock_mode']}", flush=True)
     start = time.monotonic()

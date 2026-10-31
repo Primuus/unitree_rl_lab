@@ -1,0 +1,137 @@
+{
+  "policy": "models/original_stand_selected/policy.pt",
+  "visual_source": "/home/ry/project/quadruped/src/controller/rl/resources/robots/go2",
+  "stage": "balance",
+  "physics_dt": 0.001,
+  "decimation": 20,
+  "kp": 60.0,
+  "kd": 2.5,
+  "action_scale": 0.4,
+  "clip_actions": null,
+  "robot_mass": 16.087,
+  "friction": 1.0,
+  "gait_period": 1.0,
+  "gait_clock_mode": "moving_only",
+  "command": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "initial_position": [
+    0.0,
+    0.0,
+    0.5545316934585571
+  ],
+  "initial_quaternion": [
+    0.7071067690849304,
+    0.0,
+    -0.7071067690849304,
+    0.0
+  ],
+  "action_names": [
+    "RL_hip_joint",
+    "RL_thigh_joint",
+    "RL_calf_joint",
+    "RR_hip_joint",
+    "RR_thigh_joint",
+    "RR_calf_joint"
+  ],
+  "observation_joint_names": [
+    "RL_hip_joint",
+    "RR_hip_joint",
+    "RL_thigh_joint",
+    "RR_thigh_joint",
+    "RL_calf_joint",
+    "RR_calf_joint"
+  ],
+  "action_offset": [
+    0.0,
+    2.2207963466644287,
+    -1.2999999523162842,
+    0.0,
+    2.2207963466644287,
+    -1.2999999523162842
+  ],
+  "initial_joint_pos": [
+    0.0,
+    2.2207963466644287,
+    -1.2999999523162842,
+    0.0,
+    2.2207963466644287,
+    -1.2999999523162842
+  ],
+  "observation_terms": [
+    "linear_velocity",
+    "angular_velocity",
+    "projected_gravity",
+    "command",
+    "gait_phase",
+    "joint_pos",
+    "joint_vel",
+    "last_action",
+    "heading"
+  ],
+  "joint_velocity_limits": [
+    30.099998474121094,
+    30.099998474121094,
+    15.69999885559082,
+    30.099998474121094,
+    30.099998474121094,
+    15.69999885559082
+  ],
+  "joint_armature": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "actuator_curve": {
+    "X1": 13.5,
+    "X2": 30,
+    "Y1": 20.2,
+    "Y2": 23.4,
+    "Fs": 0.0,
+    "Fd": 0.0,
+    "Va": 0.01,
+    "min_delay": 0,
+    "max_delay": 0
+  },
+  "urdf": "../../ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/resources/go2_biped_walk.urdf",
+  "observation_dim": 34,
+  "action_target_limits": [
+    [
+      -0.65,
+      0.65
+    ],
+    [
+      1.35,
+      2.95
+    ],
+    [
+      -2.5,
+      -0.9
+    ],
+    [
+      -0.65,
+      0.65
+    ],
+    [
+      1.35,
+      2.95
+    ],
+    [
+      -2.5,
+      -0.9
+    ]
+  ],
+  "fuse_static": false,
+  "observation_com": [
+    0.07461666315793991,
+    -2.8097832394102795e-10,
+    -0.002222844399511814
+  ],
+  "min_base_height": 0.35,
+  "min_upright_cos": 0.5816830894638836
+}

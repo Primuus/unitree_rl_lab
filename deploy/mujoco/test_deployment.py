@@ -84,6 +84,58 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(np.all(np.abs(sim.data.qpos[sim.qids]-before)
                                <= sim.velocity_limits*sim.model.opt.timestep+1e-12))
 
+    def test_original_six_joint_model_and_observation_contract(self):
+        cfg = dict(CFG)
+        cfg.update(
+            urdf="../../ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/resources/go2_biped_walk.urdf",
+            action_names=[f"{leg}_{joint}_joint" for leg in ("RL","RR") for joint in ("hip","thigh","calf")],
+            observation_joint_names=[f"{leg}_{joint}_joint" for joint in ("hip","thigh","calf") for leg in ("RL","RR")],
+            action_offset=[0.,2.2207963,-1.3,0.,2.2207963,-1.3],
+            observation_terms=["linear_velocity","angular_velocity","projected_gravity","command","gait_phase",
+                               "joint_pos","joint_vel","last_action","heading"],
+            observation_dim=34, gait_clock_mode="moving_only", gait_period=1.0)
+        model = load_model(cfg, ROOT)
+        self.assertEqual(model.nu, 6)
+        self.assertEqual(model.nq, 13)
+        names = [model.joint(i).name for i in range(model.njnt)]
+        self.assertFalse(any(n.startswith(("FL_","FR_")) for n in names))
+        np.testing.assert_allclose(model.body_mass.sum(), CFG["robot_mass"])
+        q = np.asarray(cfg["action_offset"])+np.arange(6)/10
+        obs = build_observation(np.eye(3),np.zeros(3),np.zeros(3),q,np.arange(6)*20,
+                                np.arange(6),np.array([0.,.03]),np.array([0.,100.]),0.,cfg)
+        self.assertEqual(obs.shape, (34,))
+        np.testing.assert_allclose(obs[14:20],np.array([0,3,1,4,2,5])/10)
+        np.testing.assert_allclose(obs[20:26],[0,3,1,4,2,5])
+        np.testing.assert_allclose(obs[26:32],np.arange(6))
+        cfg["observation_terms"] += ["foot_height","foot_load"]
+        cfg["observation_dim"] = 38
+        extended = build_observation(np.eye(3),np.zeros(3),np.zeros(3),q,np.arange(6)*20,
+                                    np.arange(6),np.array([0.,.03]),np.array([0.,100.]),0.,cfg)
+        np.testing.assert_allclose(extended[:34],obs)
+        np.testing.assert_allclose(extended[34:],[0.,.3,0.,100/(cfg["robot_mass"]*9.81)],atol=1e-7)
+
+    def test_original_fixed_body_com_and_velocity_observation(self):
+        cfg = json.loads((ROOT/"original_stand.json").read_text())
+        sim = Simulation(cfg, ROOT/cfg["policy"])
+        # This symmetric source must retain zero lateral COM after compiling.
+        np.testing.assert_allclose(sim.data.subtree_com[sim.base, 1], 0., atol=1e-10)
+        self.assertEqual(sim.model.nv, 12)
+        sim.data.qvel[:6] = [1.,2.,3.,.1,.2,.3]
+        mujoco.mj_forward(sim.model, sim.data)
+        # Independent point Jacobian at the training COM, expressed in world frame.
+        point = sim.data.xpos[sim.base] + sim.data.xmat[sim.base].reshape(3,3) @ cfg["observation_com"]
+        jac = np.zeros((3,sim.model.nv)); rot = np.zeros_like(jac)
+        mujoco.mj_jac(sim.model,sim.data,jac,rot,point,sim.base)
+        np.testing.assert_allclose(sim.observation()[:3], jac @ sim.data.qvel, atol=2e-6)
+        sim.data.time = .02
+        sim.records = [dict(time=0.,position=[0.,0.,.2],upright_cos=1.,forward_speed=0.,
+                            heading_yaw_rad=0.,yaw_rate_world_radps=0.,base_contact=False,front_contact=False)]
+        self.assertEqual(sim.result()["balance_acceptance"]["values"]["failures"],1)
+        pt = Policy(ROOT/cfg["policy"],34,6)
+        onnx = Policy((ROOT/cfg["policy"]).with_suffix(".onnx"),34,6)
+        for obs in np.random.default_rng(2).normal(size=(16,34)).astype(np.float32):
+            np.testing.assert_allclose(pt(obs),onnx(obs),rtol=1e-4,atol=2e-5)
+
     def test_exported_policy_backends(self):
         policy_path = ROOT/CFG["policy"]
         pt = Policy(policy_path.with_suffix(".pt"))

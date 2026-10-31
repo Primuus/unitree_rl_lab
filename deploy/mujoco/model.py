@@ -26,15 +26,16 @@ def origin(element):
 def load_model(config, root):
     source = Path(config["visual_source"]).expanduser()
     visual = ET.parse(source / "go2.xml").getroot()
-    urdf = ET.parse(root / "resources/go2_description.urdf").getroot()
+    urdf = ET.parse(root / config.get("urdf", "resources/go2_description.urdf")).getroot()
     links = {link.get("name"): link for link in urdf.findall("link")}
+    armature = dict(zip(config["action_names"], config.get("joint_armature", [0.0]*len(config["action_names"]))))
     children = {}
     for joint in urdf.findall("joint"):
         children.setdefault(joint.find("parent").get("link"), []).append(joint)
     visual_bodies = {b.get("name"): b for b in visual.iter("body")}
     xml = ET.Element("mujoco", model="Go2 reference handstand")
     ET.SubElement(xml, "compiler", angle="radian", meshdir=str(source / "obj"),
-                  autolimits="true", fusestatic="true")
+                  autolimits="true", fusestatic=str(config.get("fuse_static", True)).lower())
     ET.SubElement(xml, "option", timestep=str(config["physics_dt"]),
                   gravity="0 0 -9.81", integrator="implicitfast", cone="elliptic")
     ET.SubElement(xml, "size", nuser_jnt="1")
@@ -59,7 +60,7 @@ def load_model(config, root):
             ET.SubElement(body, "joint", name=joint.get("name"), type="hinge",
                           axis=joint.find("axis").get("xyz"),
                           range=f'{limit.get("lower")} {limit.get("upper")}',
-                          damping="0", armature="0", frictionloss="0",
+                          damping="0", armature=str(armature[joint.get("name")]), frictionloss="0",
                           user=limit.get("velocity"))
             effort = float(limit.get("effort"))
             ET.SubElement(motors, "motor", name=joint.get("name"),
