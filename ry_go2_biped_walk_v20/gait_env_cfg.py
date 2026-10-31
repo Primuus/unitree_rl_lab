@@ -98,7 +98,7 @@ def configure_stage(cfg, stage, gait_penalties=True):
     cfg.scene.contact_forces.update_period = 0.0
     if cfg.stage2_support:
         cfg.terminations.nonfoot_contact = DoneTerm(func=gm.stage2_nonfoot_contact)
-    cfg.tracking_lin_vel_sigma = 0.0025
+    cfg.tracking_lin_vel_sigma = REFERENCE["reward_parameters"]["tracking_sigma"] if stage == "walk" else 0.0025
     cfg.tracking_ang_vel_sigma = 0.04
     cfg.balance_gait_clock = "always"
     for name in ("contact", "feet_clearance"):

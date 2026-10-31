@@ -15,7 +15,7 @@ parser.add_argument("--stage", choices=["balance", "walk"], default="walk")
 parser.add_argument("--gait_clock", choices=["auto", "always", "moving_only"], default="auto",
                     help="auto reads the checkpoint observation contract; overrides are diagnostic")
 parser.add_argument("--reward_profile", choices=["auto", "current"], default="auto",
-                    help="auto preserves the saved stage2 penalty profile; current scores with present rules")
+                    help="auto preserves saved stage2 penalties and velocity width; current scores with present rules")
 parser.add_argument("--num_envs", type=int, default=16)
 parser.add_argument("--steps", type=int, default=1000)
 parser.add_argument("--speed", type=float, default=0.2)
@@ -68,6 +68,8 @@ def main():
     saved_stage2 = profile in ("stage2_foot_support_v1", "stage2_foot_support_v2")
     configure_stage(cfg, "walk" if saved_stage2 else args.stage,
                     gait_penalties=args.reward_profile == "current" or profile != "stage2_foot_support_v1")
+    if saved_stage2 and args.reward_profile == "auto":
+        cfg.tracking_lin_vel_sigma = provenance["layout"]["tracking_lin_vel_sigma"]
     # Evaluation mode selects commands; the checkpoint retains its support constraints.
     cfg.stage = args.stage
     if args.gait_clock != "auto":

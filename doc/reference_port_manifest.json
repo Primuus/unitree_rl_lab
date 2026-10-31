@@ -44,7 +44,8 @@
     "2026-10-31 user-approved after rollback: contact and feet_clearance additionally multiply 0.3+0.7*clamp((height-0.43)/0.07,0,1). Velocity tracking and penalties unchanged; this is a new adaptation, not an upstream formula.",
     "2026-10-31 user-approved: feet_clearance sums scheduled swing-foot exponential scores times original-project V36 unload sigmoid((0.15-load)*20) and opposite support sigmoid((load-0.35)*12); normalized world-Z foot loads clamped to [0,2]. Existing sole height, width .01, orientation and height factors retained.",
     "2026-10-31 user-approved stage2: non-hind-foot force >5N in four physics samples terminates; major positive rewards multiply legal contact, height progress (0.43 to 0.50m) and total positive hind-foot load / 0.8 body weights, clamped. Phase contact requires both feet to match. Swing positive feedback removes unload/opposite sigmoids; peak remains 0.06m. Balance and all 27 weights remain unchanged.",
-    "2026-10-31 user-approved after measured reward audit: stage2 v2 raises feet_clearance_deficit from -1 to -3 and adds phase_contact_error=-2 times mean(actual_contact != phase_stance). Both penalties are ungated by height/orientation/support. Preserve 6cm peak and 20% double support. This added penalty is a user-approved adaptation, not a copied upstream term."
+    "2026-10-31 user-approved after measured reward audit: stage2 v2 raises feet_clearance_deficit from -1 to -3 and adds phase_contact_error=-2 times mean(actual_contact != phase_stance). Both penalties are ungated by height/orientation/support. Preserve 6cm peak and 20% double support. This added penalty is a user-approved adaptation, not a copied upstream term.",
+    "2026-10-31 user approved walk linear tracking denominator 0.0025 -> reference tracking_sigma 0.25 for the fixed 0.5 m/s command. Balance linear remains 0.0025; angular remains 0.04. Weights, 6cm peak, 1.6s cycle and PPO unchanged. Auto evaluation restores saved stage2 linear width; current explicitly uses present width. No training launched."
   ],
   "adapter_changes": [
     "Compute height gate from current state before evaluating terms",
@@ -166,7 +167,7 @@
       "angular": 0.04
     },
     "walk": {
-      "linear": 0.0025,
+      "linear": 0.25,
       "angular": 0.04
     }
   },

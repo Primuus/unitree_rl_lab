@@ -226,7 +226,7 @@ class ReferencePortTests(unittest.TestCase):
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<configure_stage>", "exec"), namespace)
         cfg = SimpleNamespace(scene=SimpleNamespace(contact_forces=SimpleNamespace()),
                               commands=SimpleNamespace(base_velocity=SimpleNamespace(ranges=SimpleNamespace())))
-        for stage, linear, angular in [("balance", .0025, .04), ("walk", .0025, .04), ("balance", .0025, .04)]:
+        for stage, linear, angular in [("balance", .0025, .04), ("walk", .25, .04), ("balance", .0025, .04)]:
             namespace["configure_stage"](cfg, stage)
             self.assertEqual((cfg.tracking_lin_vel_sigma, cfg.tracking_ang_vel_sigma), (linear, angular))
             for name in ("contact", "feet_clearance"):

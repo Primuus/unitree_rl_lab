@@ -67,3 +67,5 @@
 - logs/evaluation/model6988_forward05_probe.{json,trace.json,log}
 
 临时探测脚本已清理，模型及评估记录保留。
+
+后续用户已批准将walk线速度奖励分母恢复0.25；本页保留修改前诊断。实际改动及承重检查见[后续实施记录](Stage2_行走速度奖励宽度恢复与承重转移检查.md)。
