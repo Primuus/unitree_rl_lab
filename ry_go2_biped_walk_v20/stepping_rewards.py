@@ -27,3 +27,9 @@ def clearance_deficit(height, target, swing, peak_height=0.06):
 def contact_score(contact, stance):
     # Unlike "exactly one contact", the desired side changes with phase.
     return (contact == stance).float().mean(dim=-1)
+
+
+def body_height_factor(height, low=0.43, full=0.50, min_factor=0.3):
+    """Scale positive stepping rewards without removing low-stance feedback."""
+    progress = ((height - low) / (full - low)).clamp(0.0, 1.0)
+    return min_factor + (1.0 - min_factor) * progress

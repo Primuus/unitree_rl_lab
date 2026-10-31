@@ -363,24 +363,34 @@ class ReferencePortTests(unittest.TestCase):
         positions[1,2,2] += .03
         s = SimpleNamespace(_get_phase=lambda:torch.full((3,),.25),num_envs=3,contact_foot_indices=[2,3],
                             measured_heights=torch.zeros(3,1),rew_hanstand=torch.full((3,),.6),
+                            root_states=torch.tensor([[0.,0.,.425],[0.,0.,.46],[0.,0.,.50]]),
                             _task_upright_gate=lambda:torch.tensor([True,True,False]),
                             contact_forces=torch.tensor([[[0.,0.,0.],[0.,0.,0.],[0.,0.,0.],[0.,0.,10.]]]).expand(3,4,3),
                             robot=SimpleNamespace(data=SimpleNamespace(body_pos_w=positions,
                                                                        body_quat_w=torch.zeros(3,4,4))))
         namespace = {'state':lambda _:s,'step_targets':stepping.step_targets,
                      'clearance_score':stepping.clearance_score,'clearance_deficit':stepping.clearance_deficit,
-                     'contact_score':stepping.contact_score,
+                     'contact_score':stepping.contact_score,'body_height_factor':stepping.body_height_factor,
                      'quat_apply':lambda quat,offset:offset}
         exec(compile(ast.Module(body=[fn],type_ignores=[]),str(path),'exec'),namespace)
         env = SimpleNamespace(num_envs=3,cfg=SimpleNamespace(balance_step_height=.06,balance_double_support_fraction=.2,
-                                                   balance_clearance_width=.01))
+                                                   balance_clearance_width=.01, step_reward_height_low=.43,
+                                                   step_reward_height_full=.50, step_reward_height_min_factor=.3))
         torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance_deficit'),
                                    torch.tensor([1.,.25,1.]))
         expected = torch.tensor([(1.+torch.exp(torch.tensor(-6.)))/2,
                                  (1.+torch.exp(torch.tensor(-3.)))/2,0.])
-        torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance'),expected)
+        torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance'),expected*torch.tensor([.3,.6,1.]))
         torch.testing.assert_close(namespace['balance_step_reward'](env,'contact'),
-                                   torch.tensor([1.,1.,0.]))
+                                   torch.tensor([.3,.6,0.]))
+
+    def test_step_height_factor_endpoints_monotonicity_and_batch_independence(self):
+        height = torch.tensor([.3, .425, .43, .445, .46, .48, .5, .6])
+        factor = stepping.body_height_factor(height)
+        torch.testing.assert_close(factor, torch.tensor([.3, .3, .3, .45, .6, .8, 1., 1.]))
+        self.assertTrue((factor[1:] >= factor[:-1]).all())
+        for i in range(len(height)):
+            torch.testing.assert_close(stepping.body_height_factor(height[i:i+1]), factor[i:i+1])
 
     def test_shared_clock_survives_stop_start_and_supports_legacy_replay(self):
         import math

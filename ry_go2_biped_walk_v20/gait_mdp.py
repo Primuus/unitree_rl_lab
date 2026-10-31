@@ -7,7 +7,7 @@ from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk import walk_mdp as
 from .reference_config import REFERENCE
 from .reference_rewards import ReferenceRewards
 from .robot_cfg import JOINT_NAMES, FOOT_NAMES
-from .stepping_rewards import step_targets, clearance_score, clearance_deficit, contact_score
+from .stepping_rewards import step_targets, clearance_score, clearance_deficit, contact_score, body_height_factor
 
 
 class RewardState(ReferenceRewards):
@@ -116,7 +116,10 @@ def balance_step_reward(env, name):
         value = contact_score(contact, stance)
     if name == "feet_clearance_deficit":
         return value
-    return value * s._task_upright_gate()
+    height = s.root_states[:, 2] - s.measured_heights.mean(-1)
+    factor = body_height_factor(height, env.cfg.step_reward_height_low,
+                                env.cfg.step_reward_height_full, env.cfg.step_reward_height_min_factor)
+    return value * s._task_upright_gate() * factor
 
 
 def reset_reference_history(env, env_ids):
@@ -196,7 +199,14 @@ def validate_layout(env):
                 "height_target_m": s.cfg.rewards.base_height_target,
                 "height_reward_width_m": s.cfg.rewards.base_height_reward_width,
                 "task_upright_cos_min": s.cfg.rewards.task_upright_cos_min,
-                "orientation_only_terms": ["tracking_lin_vel", "tracking_ang_vel", "contact", "feet_clearance"],
+                "orientation_only_terms": ["tracking_lin_vel", "tracking_ang_vel"],
+                "orientation_and_height_terms": ["contact", "feet_clearance"],
+                "step_height_scaling": {
+                    "low_m": env.cfg.step_reward_height_low,
+                    "full_m": env.cfg.step_reward_height_full,
+                    "min_factor": env.cfg.step_reward_height_min_factor,
+                    "formula": "min_factor + (1-min_factor)*clamp((height-low)/(full-low),0,1)",
+                },
                 "ungated_penalties": ["feet_clearance_deficit"],
                 "zero_yaw_gate": "abs(command_yaw) < 0.1; no height gate",
                 "legacy_height_score_terms": ["ang_xz", "symmetric_joints", "default_pos_reward"],

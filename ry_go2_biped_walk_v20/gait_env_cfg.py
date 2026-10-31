@@ -128,6 +128,9 @@ class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     balance_gait_clock: str = "always"
     balance_double_support_fraction: float = 0.2
     balance_clearance_width: float = 0.01
+    step_reward_height_low: float = 0.43
+    step_reward_height_full: float = 0.50
+    step_reward_height_min_factor: float = 0.3
     scene: ReferenceSceneCfg = ReferenceSceneCfg(num_envs=4096, env_spacing=3.0)
     actions: ReferenceActionsCfg = ReferenceActionsCfg()
     observations: V20ObservationsCfg = V20ObservationsCfg()
