@@ -3,6 +3,7 @@
 当前工程位于服务器 Docker 容器 `isaac-record` 的 `/workspace/ry_unitree_rl_lab`；本机 Git 副本为 `/home/ry/workspace/ry_unitree_rl_lab`。默认在容器工程修改和验证，再同步本机。
 
 - 用户最新要求：每次完成修改及必要验证后，仅提交本地 Git；未经用户后续明确要求，不推送 GitHub。服务器继续同步训练与评估所需代码。结束前核对本机与容器代码一致，并说明本地提交及 GitHub 未推送状态；遇到冲突不覆盖他人改动。
+- 称谓约定：参考工程指 GitHub `yusongmin1/My_unitree_go2_gym`；原工程指服务器 `/workspace/unitree_rl_lab`；当前工程指 `/workspace/ry_unitree_rl_lab`。分析时明确区分，避免将原工程固定前腿路线当成参考工程的实现。
 - 后续直接覆盖当前实现，不建立并存的版本目录或旧代码副本。训练模型、日志和实验记录仍应保留，不作为旧代码副本清理。
 - 现有 `ry_go2_biped_walk_v20/`、`scripts/train_v20.py`、`scripts/eval_v20.py` 和任务 ID 保留为稳定入口；当前内容为 12 关节实现。
 - 奖励公式、权重与主要控制/PPO 参数优先复用用户指定的 `yusongmin1/My_unitree_go2_gym/go2_handstand`。不自行设计替代奖励或擅自调权重；接口适配及明确修正记录于 `doc/reference_port_manifest.json`。

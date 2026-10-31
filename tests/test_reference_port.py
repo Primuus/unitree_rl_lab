@@ -121,6 +121,7 @@ class ReferencePortTests(unittest.TestCase):
         for width, values in [
             (.04, [1., .939413, .778801, .367879, .367879, .105399, 1., .367879]),
             (.01, [1., .778801, .367879, .018316, .018316, .00012341, 1., .018316]),
+            (.0025, [1., .367879, .018316, 1.12535e-7, 1.12535e-7, 2.31952e-16, 1., 1.12535e-7]),
         ]:
             with self.subTest(width=width):
                 obj.cfg.rewards.tracking_lin_vel_sigma = width
@@ -135,7 +136,7 @@ class ReferencePortTests(unittest.TestCase):
         obj.commands.zero_()
         obj.base_ang_vel.zero_()
         obj.base_ang_vel[:, 0] = torch.tensor([0., .1, .2, .3, .4, .5, -.2, .1])
-        obj.cfg.rewards.tracking_lin_vel_sigma = .01
+        obj.cfg.rewards.tracking_lin_vel_sigma = .0025
         original_linear = obj._reward_tracking_lin_vel().clone()
         obj.cfg.rewards.tracking_ang_vel_sigma = .04
         expected = torch.tensor([1., .778801, .367879, .105399, .018316, .00193045, .367879, .778801])
@@ -153,7 +154,7 @@ class ReferencePortTests(unittest.TestCase):
         namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": SimpleNamespace}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<configure_stage>", "exec"), namespace)
         cfg = SimpleNamespace(commands=SimpleNamespace(base_velocity=SimpleNamespace(ranges=SimpleNamespace())))
-        for stage, linear, angular in [("balance", .01, .04), ("walk", .25, .25), ("balance", .01, .04)]:
+        for stage, linear, angular in [("balance", .0025, .04), ("walk", .25, .25), ("balance", .0025, .04)]:
             namespace["configure_stage"](cfg, stage)
             self.assertEqual((cfg.tracking_lin_vel_sigma, cfg.tracking_ang_vel_sigma), (linear, angular))
 

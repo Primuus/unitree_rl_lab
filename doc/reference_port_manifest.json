@@ -50,7 +50,7 @@
     "Balance stage disables contact and feet_clearance; walk uses all 23 upstream terms",
     "Fixed commands: balance=(0,0,0), walk=(0.2,0,0); plane terrain",
     "Only material friction/restitution randomization is ported; other upstream domain randomization is not implemented",
-    "User-approved balance tracking denominators: linear=0.01, angular=0.04; walk linear and angular remain 0.25; all reward weights unchanged"
+    "User-approved balance tracking denominators: linear=0.0025, angular=0.04; walk linear and angular remain 0.25; all reward weights unchanged"
   ],
   "policy_source": {
     "init_noise_std": 1.0,
@@ -147,7 +147,7 @@
   "runtime_task_id": "RY-Unitree-Go2-Biped-Gait-v20",
   "tracking_denominators": {
     "balance": {
-      "linear": 0.01,
+      "linear": 0.0025,
       "angular": 0.04
     },
     "walk": {
