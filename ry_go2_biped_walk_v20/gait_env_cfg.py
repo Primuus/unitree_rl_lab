@@ -96,6 +96,9 @@ def configure_stage(cfg, stage):
     if stage == "balance":
         cfg.rewards.contact = None
         cfg.rewards.feet_clearance = None
+        cfg.rewards.foot_slip = RewTerm(
+            func=wm.feet_slide_l2, weight=-0.5,
+            params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS})
     cfg.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0) if stage == "balance" else (0.2, 0.2)
     cfg.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
     cfg.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)

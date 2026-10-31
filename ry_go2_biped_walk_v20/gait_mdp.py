@@ -124,6 +124,7 @@ def validate_layout(env):
     if env.cfg.stage == "balance":
         expected.pop("contact")
         expected.pop("feet_clearance")
+        expected["foot_slip"] = -0.5
     active = {name: env.reward_manager.get_term_cfg(name).weight
               for name in env.reward_manager.active_terms}
     if active != expected:

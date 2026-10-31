@@ -77,6 +77,7 @@ def main():
     project = Path(__file__).resolve().parents[1]
     source_files = list((project / "ry_go2_biped_walk_v20").glob("*.py"))
     source_files += [Path(__file__).resolve(), project / "doc/reference_port_manifest.json"]
+    source_files += [project / "ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py"]
     source_files += list((project / "third_party/My_unitree_go2_gym").glob("*"))
     hashes = {}
     for source in source_files:

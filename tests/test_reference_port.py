@@ -151,12 +151,44 @@ class ReferencePortTests(unittest.TestCase):
     def test_stage_switch_restores_tracking_widths(self):
         tree = ast.parse((ROOT / "ry_go2_biped_walk_v20/gait_env_cfg.py").read_text())
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "configure_stage")
-        namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": SimpleNamespace}
+        namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": SimpleNamespace,
+                     "RewTerm": SimpleNamespace, "wm": SimpleNamespace(feet_slide_l2=object()),
+                     "REAR_BODIES": object(), "REAR_CONTACTS": object()}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<configure_stage>", "exec"), namespace)
         cfg = SimpleNamespace(commands=SimpleNamespace(base_velocity=SimpleNamespace(ranges=SimpleNamespace())))
         for stage, linear, angular in [("balance", .0025, .04), ("walk", .25, .25), ("balance", .0025, .04)]:
             namespace["configure_stage"](cfg, stage)
             self.assertEqual((cfg.tracking_lin_vel_sigma, cfg.tracking_ang_vel_sigma), (linear, angular))
+            if stage == "balance":
+                term = cfg.rewards.foot_slip
+                self.assertEqual(term.weight, -0.5)
+                self.assertIs(term.func, namespace["wm"].feet_slide_l2)
+                self.assertIs(term.params["asset_cfg"], namespace["REAR_BODIES"])
+                self.assertIs(term.params["sensor_cfg"], namespace["REAR_CONTACTS"])
+            else:
+                self.assertFalse(hasattr(cfg.rewards, "foot_slip"))
+
+    def test_hind_foot_slip_uses_contact_and_horizontal_velocity(self):
+        path = ROOT / "ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py"
+        fn = next(n for n in ast.parse(path.read_text()).body
+                  if isinstance(n, ast.FunctionDef) and n.name == "feet_slide_l2")
+        namespace = {}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(path), "exec"), namespace)
+        class Scene(dict):
+            pass
+        # Robot and contact sensor body orders intentionally differ.
+        velocity = torch.full((4, 4, 3), 100.)
+        velocity[:, 1, :2] = torch.tensor([3., 4.])
+        velocity[:, 3, :2] = torch.tensor([6., 8.])
+        contact_time = torch.ones(4, 4)
+        contact_time[:, [2, 0]] = torch.tensor([[0., 0.], [.02, 0.], [0., .02], [.02, .02]])
+        scene = Scene(robot=SimpleNamespace(data=SimpleNamespace(body_lin_vel_w=velocity)))
+        scene.sensors = {"contact": SimpleNamespace(data=SimpleNamespace(current_contact_time=contact_time))}
+        value = namespace["feet_slide_l2"](
+            SimpleNamespace(scene=scene), SimpleNamespace(name="robot", body_ids=[1, 3]),
+            SimpleNamespace(name="contact", body_ids=[2, 0]))
+        # Airborne feet, front feet and vertical speed must not contribute.
+        torch.testing.assert_close(value, torch.tensor([0., 25., 100., 125.]))
 
     def test_phase_boundary_always_has_one_stance(self):
         obj = sample(ported)

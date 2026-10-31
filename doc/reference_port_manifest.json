@@ -50,7 +50,8 @@
     "Balance stage disables contact and feet_clearance; walk uses all 23 upstream terms",
     "Fixed commands: balance=(0,0,0), walk=(0.2,0,0); plane terrain",
     "Only material friction/restitution randomization is ported; other upstream domain randomization is not implemented",
-    "User-approved balance tracking denominators: linear=0.0025, angular=0.04; walk linear and angular remain 0.25; all reward weights unchanged"
+    "User-approved balance tracking denominators: linear=0.0025, angular=0.04; walk linear and angular remain 0.25; all reward weights unchanged",
+    "User-approved balance-only foot_slip=-0.5 inherited from original /workspace/unitree_rl_lab; 22 balance rewards, 23 walk rewards; reference reward weights unchanged"
   ],
   "policy_source": {
     "init_noise_std": 1.0,
@@ -153,6 +154,22 @@
     "walk": {
       "linear": 0.25,
       "angular": 0.25
+    }
+  },
+  "original_project_reward_additions": {
+    "foot_slip": {
+      "stage": "balance",
+      "weight": -0.5,
+      "original_source": "/workspace/unitree_rl_lab/source/unitree_rl_lab/unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py:feet_slide_l2",
+      "runtime_source": "ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py:feet_slide_l2",
+      "runtime_source_sha256": "1163a0f3945fa3fd70b9ab676c3ccdbb5e0bcb5bc3e41c04d46d52260ccc9cae",
+      "feet": [
+        "RL_foot",
+        "RR_foot"
+      ],
+      "contact": "current_contact_time > 0",
+      "formula": "sum(contact * (world_vx**2 + world_vy**2))",
+      "weight_adaptation": "none; original -0.5 retained"
     }
   }
 }
