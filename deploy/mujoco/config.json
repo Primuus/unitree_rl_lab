@@ -1,7 +1,7 @@
 {
-  "policy": "models/stage1_balance_clearance10_5990/exported/policy.pt",
+  "policy": "models/stage2_foot_support_6489/exported/policy.pt",
   "visual_source": "/home/ry/project/quadruped/src/controller/rl/resources/robots/go2",
-  "stage": "balance",
+  "stage": "walk",
   "physics_dt": 0.001,
   "decimation": 20,
   "kp": 40.0,
@@ -13,7 +13,7 @@
   "gait_period": 1.6,
   "gait_clock_mode": "auto",
   "command": [
-    0.0,
+    0.05,
     0.0,
     0.0
   ],

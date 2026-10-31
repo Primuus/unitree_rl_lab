@@ -27,7 +27,7 @@ class DeploymentTests(unittest.TestCase):
         obs = build_observation(rotation, np.array([0., 1., 0.]), np.array([4., 8., 12.]),
                                 q, np.arange(12)*20., np.arange(12),
                                 np.array([.02, .05]), np.array([.4, .6])*16.087*9.81, 1.,
-                                {**CFG, 'gait_clock_mode':'moving_only'})
+                                {**CFG, 'gait_clock_mode':'moving_only', 'command':[0.,0.,0.]})
         np.testing.assert_allclose(obs[:3], [1, 0, 0], atol=1e-7)
         np.testing.assert_allclose(obs[3:9], [1, 2, 3, -1, 0, 0])
         np.testing.assert_array_equal(obs[9:14], np.zeros(5))
@@ -154,7 +154,7 @@ class DeploymentTests(unittest.TestCase):
             path.write_text(json.dumps({'layout':{'gait_clock':{'mode':'always','period_s':1.6}}}))
             self.assertEqual(read_gait_clock(path), {'mode':'always','period_s':1.6})
         with patch('deploy.read_gait_clock', return_value={'mode':'moving_only','period_s':1.6}):
-            sim = Simulation(CFG, ROOT/CFG['policy'])
+            sim = Simulation({**CFG, 'command':[0.,0.,0.]}, ROOT/CFG['policy'])
         self.assertEqual(sim.cfg['gait_clock_mode'], 'moving_only')
         self.assertEqual(CFG['gait_clock_mode'], 'auto')
         np.testing.assert_array_equal(sim.observation()[12:14], [0.,0.])
@@ -168,7 +168,7 @@ class DeploymentTests(unittest.TestCase):
         np.testing.assert_array_equal(modern.observation()[12:14], [0.,1.])
 
     def test_acceptance_rejects_turning_and_excludes_post_failure_motion(self):
-        sim = Simulation(CFG, ROOT/CFG['policy'])
+        sim = Simulation({**CFG, 'stage':'balance', 'command':[0.,0.,0.]}, ROOT/CFG['policy'])
         sim.data.time = 20.
         sim.records = [dict(time=i*.02, position=[0., 0., .52], upright_cos=1.,
                             forward_speed=0., front_contact=False, base_contact=False,

@@ -1,15 +1,15 @@
 {
-  "training_commit": "f434084",
-  "run": "2026-10-31_04-13-39_balance_balance_clearance10_continue500",
-  "checkpoint": "model_5990.pt",
-  "stage": "balance",
+  "training_commit": "4f5ecb7",
+  "run": "2026-10-31_13-16-56_walk_stage2_foot_support_continue500",
+  "checkpoint": "model_6489.pt",
+  "stage": "walk",
   "policy_file_sha256": {
-    "params/env.yaml": "24fe499cfb21f8bea98242a2c872d4fae379790ef42a5857d3b12a4f9e7fcfb4",
-    "params/deploy.yaml": "06fae468e249c365a02f99c48b107b83cdc3a8e53e16e86460f86c923b76c231",
-    "params/provenance.json": "5354f061ea23da75089d779d27de5b96cf53ad72aa1950daa793175817529eae",
+    "exported/policy.pt": "82f91e46972e84886b264c8c08ae2b28143ffcc8c01e182b0b167d5ce649989e",
+    "exported/policy.onnx": "442fdc7278f9e0388680b2d762de76e377834502306e199b48feb494c7cd1669",
+    "params/deploy.yaml": "699f6ff0f5c0706c6343d1179ee143b4d05b9e25bbdf9378a91e43a24cfffff0",
+    "params/env.yaml": "25f22073d3df5deee11e5cd4b7445812ccf7050393814d7726095b50783e49ce",
     "params/agent.yaml": "e7dccdfd83d9c3c59a2e092b921e2bd6c7fe51209911737d3aed06d879c558a1",
-    "exported/policy.pt": "347f2b6293d81d1b664d602749daf3f80f383b286bb70b9b3dacd1eb62e49721",
-    "exported/policy.onnx": "d70b85b0c21d8fe1fe0b8a41fa4a8d4cec9a3cac2b48458442cd92c3dcc2f502"
+    "params/provenance.json": "556ec542ccb59a8e8fe66a957973cbbe7df409d1413ba835fdbd46973007ce10"
   },
   "training_urdf": {
     "origin": "isaac-record:/workspace/unitree_ros/robots/go2_description/urdf/go2_description.urdf",
@@ -26,9 +26,9 @@
     "Visual mesh files remain in the existing local quadruped project.",
     "Models and experimental outputs are excluded from Git."
   ],
-  "checkpoint_sha256": "a24877b49c3f33d3c061f7a57665621f901927b919486b58b739774f4887733d",
-  "local_model_directory": "deploy/mujoco/models/stage1_balance_clearance10_5990",
-  "total_training_iterations": 6000,
+  "checkpoint_sha256": "65ffd5ddf4add243a7cb2e02b571ae25eb32ff64d0126cb81423b135950e6b49",
+  "local_model_directory": "deploy/mujoco/models/stage2_foot_support_6489",
+  "total_training_iterations": 6500,
   "joint_velocity_limits": {
     "source": "Original URDF limit.velocity; verified against Isaac Lab runtime joint_vel_limits",
     "hip_thigh_rad_s": 30.1,
@@ -44,75 +44,21 @@
     "reason": "5 ms produced 100 Hz front-leg oscillations; 2.5 ms and 1 ms reduced these while preserving the 20 ms policy period",
     "report": "doc/MuJoCo抖动诊断.md"
   },
-  "trained_peak_foot_height_m": 0.02,
-  "pending_training_peak_foot_height_m": 0.06,
+  "trained_peak_foot_height_m": 0.06,
   "latest_mujoco_validation": {
-    "output": "deploy/mujoco/outputs/balance_clearance10_5990_acceptance_v2_20s.json",
-    "simulation_seconds": 20.00000000000146,
-    "policy_steps": 1000,
-    "balance_acceptance_passed": false,
-    "balance_acceptance": {
-      "version": "stationary-v2",
-      "thresholds": {
-        "min_valid_seconds": 15,
-        "min_upright_fraction_exclusive": 0.95,
-        "max_front_contact_fraction_exclusive": 0.01,
-        "max_forward_error_mps": 0.04,
-        "max_mean_abs_yaw_rate_radps": 0.05,
-        "max_heading_excursion_rad": 0.2617993877991494,
-        "max_horizontal_displacement_m": 0.2,
-        "max_path_speed_mps": 0.04
-      },
-      "values": {
-        "valid_seconds": 20,
-        "failures": 0,
-        "upright_fraction": 1,
-        "front_contact_fraction": 0,
-        "forward_error_mps": 0.1164165684087202,
-        "mean_abs_yaw_rate_radps": 0.9474555072291121,
-        "max_heading_excursion_rad": 5.848791487220968,
-        "max_horizontal_displacement_m": 0.7221778452554436,
-        "path_speed_mps": 0.11796863100560247
-      },
-      "checks": {
-        "trained_balance_policy": true,
-        "valid_duration": true,
-        "no_failure": true,
-        "upright": true,
-        "front_contact": true,
-        "forward_error": false,
-        "yaw_rate": false,
-        "heading_excursion": false,
-        "horizontal_displacement": false,
-        "horizontal_path": false
-      },
-      "failed_checks": [
-        "forward_error",
-        "yaw_rate",
-        "heading_excursion",
-        "horizontal_displacement",
-        "horizontal_path"
-      ],
-      "passed": false
-    },
-    "horizontal_path_length_m": 2.3593726201120493,
-    "max_horizontal_displacement_m": 0.7221778452554436,
-    "net_heading_change_rad": 5.791390948213595,
-    "max_heading_excursion_rad": 5.848791487220968,
-    "absolute_heading_travel_rad": 23.095225587717465,
-    "joint_velocity_limit_mode": "project_velocity_and_position",
-    "velocity_limit_applications": 304,
-    "upright_fraction": 1,
-    "front_contact_fraction": 0,
-    "mean_abs_forward_speed": 0.1164165684087202,
-    "final_position": [
-      -0.16546677819167413,
-      0.1172690711857461,
-      0.4974004503966436
-    ],
+    "output": "deploy/mujoco/outputs/stage2_foot_support_6489_forward005_20s.json",
+    "simulation_seconds": 20.0,
     "finite": true,
-    "scope": "One fixed initial state; existing numerical velocity-limit approximation retained; stationary-v2 acceptance fails"
+    "first_base_contact_s": 2.16,
+    "note": "Fixed initial state; actor/command contract verified; falls in MuJoCo. Not a successful sim2sim result. The existing stationary acceptance field is not applicable to walk commands.",
+    "deployment_tests_passed": 9
   },
-  "selection_reason": "User explicitly selected the earlier 6000-update standing policy model_5990 for local playback; training baseline remains model_2497.",
-  "local_server_hashes_reverified": true
+  "selection_reason": "User requested export of the newly completed stage2 policy",
+  "local_server_hashes_reverified": true,
+  "transfer_bytes": 1619801,
+  "default_command": [
+    0.05,
+    0.0,
+    0.0
+  ]
 }

@@ -2,7 +2,7 @@
 
 代码由本仓库 `deploy/mujoco/` 管理。本机入口 `/home/ry/workspace/ry_unitree_rl_lab_mujoco` 是该目录的符号链接，两条路径对应同一套文件。部署使用本机 `RL` conda 环境，不需要 Isaac Sim。
 
-当前用户指定使用约6000轮站立长训model_5990。本地PT、ONNX及四份配套配置已与服务器六个文件哈希重新核对一致，直接复用现有文件。model_2497继续保留为后续训练基线；此次仅切换本地观看策略。
+当前默认策略为本轮stage2的model_6489：从长训model_5990追加500轮，训练抬脚峰值6 cm。PT、ONNX及四份配置共1,619,801字节，六个SHA256与服务器一致，导出Actor全部参数与checkpoint相同。默认前进命令0.05 m/s，相位always；旧策略完整保留。评估与本地实测见[本轮记录](Stage2_500轮评估与策略本地导出.md)。
 
 原工程固定前腿V6模型可用 `./run.sh --config original_stand.json` 回放；当前MuJoCo仍会失稳，选择依据与实测限制见 [原工程站立策略回放](原工程站立策略MuJoCo演示.md)。
 
@@ -13,15 +13,15 @@ cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
 ./run.sh
 ```
 
-默认加载用户指定的长训 model_5990 的 TorchScript 策略（累计约6000轮、训练抬脚目标2cm、旧相位模式），平地、零速度命令，从后腿直立附近开始。按 `R` 重置，空格暂停/继续；关闭窗口或 Ctrl+C 退出。窗口按 60 Hz 同步，仿真尽量以实时速度运行。倒下后继续显示实际状态，不自动重置或关闭电机。
+默认加载model_6489的TorchScript策略，平地、前进0.05 m/s，从后腿直立附近开始。按R重置，空格暂停/继续；关闭窗口或Ctrl+C退出。20秒本地回放数值有限，但约2.16秒触发基座接触并倒下，不能视为已完成稳定sim2sim。查看器继续显示实际状态，不自动重置。
 
 也可在已激活的环境中运行：
 
 ```bash
 conda activate RL
 python deploy.py
-python deploy.py --policy models/stage1_balance_clearance10_5990/exported/policy.onnx
-python deploy.py --headless --duration 20 --output outputs/balance_mixed_height_2497_20s.json
+python deploy.py --policy models/stage2_foot_support_6489/exported/policy.onnx
+python deploy.py --headless --duration 20 --output outputs/stage2_foot_support_6489_forward005_20s.json
 ```
 
 `--duration 0` 表示持续运行；`--headless` 不限制到实时速度。输出 JSON 包含统计和每个策略步的轨迹，重置后重新统计。`--config` 可指定部署 JSON 配置；相对策略路径相对于部署代码目录。
@@ -42,7 +42,7 @@ python deploy.py --headless --duration 20 --output outputs/balance_mixed_height_
 - 结果：deploy/mujoco/outputs/balance_mixed_height_2497_20s.json。此验证确认部署链路可运行，不代表已经解决sim2sim差异或站稳。
 - 权重、配套下载配置及回放数据不提交Git，旧模型全部保留。下文model_5990/2996等记录为历史对照。
 
-## 当前长训model_5990与本地依赖
+## 历史长训model_5990与本地依赖
 
 - 对应训练代码本地提交：`f434084`（未推送 GitHub）。
 - 训练目录：`2026-10-31_04-13-39_balance_balance_clearance10_continue500`。
@@ -92,7 +92,7 @@ python deploy.py --headless --duration 20 --output outputs/balance_mixed_height_
 
 历史 model_5990：PT、ONNX 和四个配套配置共 1,615,482 字节，六个 SHA256 与服务器一致。7 项部署检查通过，PT/ONNX 输出一致。MuJoCo 固定初态 20 秒验证直立比例 100%、前脚接触 0、平均绝对前向速度 0.11642 m/s、状态有限；仍有运动，不能将 Isaac 的 0.02075 m/s 直接视为 MuJoCo 效果。输出：`deploy/mujoco/outputs/balance_clearance10_5990_1ms_20s.json`。
 
-该历史model_5990训练时目标为2cm；另存的model_2497已按6cm训练；当前用户选定model_5990。奖励高度不会在部署时直接修改动作。
+该历史model_5990训练时目标为2cm；另存的model_2497已按6cm训练；本次已选定stage2的model_6489。奖励高度不会在部署时直接修改动作。
 
 ```bash
 cd /home/ry/workspace/ry_unitree_rl_lab_mujoco
