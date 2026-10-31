@@ -29,7 +29,9 @@ class RewardState(ReferenceRewards):
         self.penalised_contact_indices, _ = self.robot.find_bodies([".*thigh", ".*calf"])
         self.cfg = SimpleNamespace(rewards=SimpleNamespace(
             **REFERENCE["reward_parameters"], tracking_lin_vel_sigma=env.cfg.tracking_lin_vel_sigma,
-            tracking_ang_vel_sigma=env.cfg.tracking_ang_vel_sigma))
+            tracking_ang_vel_sigma=env.cfg.tracking_ang_vel_sigma,
+            base_height_reward_width=env.cfg.base_height_reward_width,
+            task_upright_cos_min=env.cfg.task_upright_cos_min))
         self.target_gravity = torch.tensor([-1.0, 0.0, 0.0], device=self.device)
         self.descire_joint_pos = torch.tensor(
             [REFERENCE["desired_joint_angles"][name] for name in JOINT_NAMES], device=self.device)
@@ -80,11 +82,11 @@ def reference_reward(env, name):
 
 
 def balance_zero_yaw_l2(env):
-    """Leggedstand zero-turn penalty, adapted to WORLD Z and per-env height gates."""
+    """World-Z zero-turn penalty, independent of body height."""
     s = state(env)
     command = s.commands[:, 2]
     error = command - s.robot.data.root_ang_vel_w[:, 2]
-    return error.square() * (s.rew_hanstand > .78) * (command.abs() < .1)
+    return error.square() * (command.abs() < .1)
 
 
 def balance_heading_alignment(env, sensor_cfg, std=0.6):
@@ -112,7 +114,9 @@ def balance_step_reward(env, name):
     else:
         contact = s.contact_forces[:, s.contact_foot_indices, 2] > 1.0
         value = contact_score(contact, stance)
-    return value * (s.rew_hanstand > .70)
+    if name == "feet_clearance_deficit":
+        return value
+    return value * s._task_upright_gate()
 
 
 def reset_reference_history(env, env_ids):
@@ -188,11 +192,20 @@ def validate_layout(env):
             "front_foot_ids": s.feet_name_reward_indices, "hind_foot_ids": s.contact_foot_indices,
             "tracking_lin_vel_sigma": s.cfg.rewards.tracking_lin_vel_sigma,
             "tracking_ang_vel_sigma": s.cfg.rewards.tracking_ang_vel_sigma,
+            "height_reward_and_task_gates": {
+                "height_target_m": s.cfg.rewards.base_height_target,
+                "height_reward_width_m": s.cfg.rewards.base_height_reward_width,
+                "task_upright_cos_min": s.cfg.rewards.task_upright_cos_min,
+                "orientation_only_terms": ["tracking_lin_vel", "tracking_ang_vel", "contact", "feet_clearance"],
+                "ungated_penalties": ["feet_clearance_deficit"],
+                "zero_yaw_gate": "abs(command_yaw) < 0.1; no height gate",
+                "legacy_height_score_terms": ["ang_xz", "symmetric_joints", "default_pos_reward"],
+            },
             "gait_clock": {"mode": env.cfg.balance_gait_clock,
                            "period_s": s.cfg.rewards.cycle_time},
             "balance_yaw_constraints": {
                 "zero_yaw_axis": "world_z", "zero_yaw_weight": -0.2,
-                "zero_command_threshold_radps": 0.1, "zero_yaw_height_gate": 0.78,
+                "zero_command_threshold_radps": 0.1, "zero_yaw_height_gate": None,
                 "heading_target_rad": 0.0, "heading_direction": "world_positive_x",
                 "heading_weight": active["heading_alignment"],
                 "heading_std_rad": env.reward_manager.get_term_cfg("heading_alignment").params["std"],

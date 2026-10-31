@@ -122,6 +122,8 @@ class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     stage: str = "balance"
     tracking_lin_vel_sigma: float = 0.0025
     tracking_ang_vel_sigma: float = 0.04
+    base_height_reward_width: float = 0.05
+    task_upright_cos_min: float = 0.94
     balance_step_height: float = 0.06
     balance_gait_clock: str = "always"
     balance_double_support_fraction: float = 0.2

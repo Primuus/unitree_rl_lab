@@ -38,7 +38,9 @@
     "Per-environment height gates replace batch means",
     "Right stance includes phase=0.5",
     "2026-10-31 user-approved: default_pos measures only the six front-leg joints in both command modes; weight -0.1 retained.",
-    "2026-10-31 user-approved: symmetric_joints compares only FL/FR with the existing hip sign correction and height gate; hind instantaneous symmetry removed, weight -0.1 retained."
+    "2026-10-31 user-approved: symmetric_joints compares only FL/FR with the existing hip sign correction and height gate; hind instantaneous symmetry removed, weight -0.1 retained.",
+    "2026-10-31 user-approved: base_height = exp(-abs(height-0.52)/0.05), weight 1.5 retained; legacy exp(-5*abs(height-0.52)) score remains separate for untouched regularizers.",
+    "2026-10-31 user-approved: tracking_lin_vel, tracking_ang_vel, phase contact and feet_clearance use only -projected_gravity_x > 0.94; feet_clearance_deficit and zero-yaw penalty no longer require body height."
   ],
   "adapter_changes": [
     "Compute height gate from current state before evaluating terms",
@@ -188,8 +190,8 @@
     "peak_height_m": 0.06,
     "double_support_fraction": 0.2,
     "clearance_width_m": 0.01,
-    "clearance_formula": "mean(exp(-abs(sole_height-target_height)/0.01)) * height_gate",
-    "contact_formula": "mean(actual_contact == phase_stance) * height_gate",
+    "clearance_formula": "mean(exp(-abs(sole_height-target_height)/0.01)) * upright_gate",
+    "contact_formula": "mean(actual_contact == phase_stance) * upright_gate",
     "swing_phase_intervals": [
       [
         0.05,
@@ -206,13 +208,13 @@
       0,
       0
     ],
-    "notes": "User-approved phase-target adaptation shared by balance and walk. Peak foot-sole clearance 0.06 m; contact=0.9, clearance=1.0, deficit=-1.0. Prior runs trained these balance parameters; mixed commands are newly configured and not yet trained.",
+    "notes": "User-approved phase targets shared by balance and walk: peak sole clearance 0.06 m, contact=0.9, clearance=1.0, deficit=-1.0. Positive scores require upright cosine >0.94; swing deficit has no height/orientation gate.",
     "active_weights": {
       "feet_clearance": 1.0,
       "contact": 0.9,
       "feet_clearance_deficit": -1.0
     },
-    "deficit_formula": "sum(swing_mask * (relu(target_height-sole_height)/peak_height_m)**2) * (height_score > 0.70)",
+    "deficit_formula": "sum(swing_mask * (relu(target_height-sole_height)/peak_height_m)**2)",
     "deficit_origin": "User-approved new adaptation; not an upstream reference reward. Initial weight -1.0; existing positive feet_clearance retained."
   },
   "balance_yaw_constraints": {
@@ -220,11 +222,12 @@
       "weight": -0.2,
       "source": "https://github.com/yusongmin1/My_unitree_go2_gym/blob/main/legged_gym/envs/Go2_Stand/Go2_Leggedstand/Go2_Leggedstand.py#L916",
       "config_source": "https://github.com/yusongmin1/My_unitree_go2_gym/blob/main/legged_gym/envs/Go2_Stand/Go2_Leggedstand/Go2_Leggedstand_Config.py",
-      "formula": "(command_yaw - world_angular_velocity_z)**2 * (height_score > 0.78) * (abs(command_yaw) < 0.1)",
+      "formula": "(command_yaw - world_angular_velocity_z)**2 * (abs(command_yaw) < 0.1)",
       "adaptations": [
         "World Z replaces the source front-support body -X convention",
         "Per-environment gate replaces upstream batch-mean height gate",
-        "height_score uses current 0.52 m height target, rather than upstream Leggedstand 0.47 m"
+        "height_score uses current 0.52 m height target, rather than upstream Leggedstand 0.47 m",
+        "2026-10-31 supersedes earlier height gates: retain only command threshold; no height/orientation gate."
       ],
       "runtime_function": "gait_mdp.balance_zero_yaw_l2"
     },
@@ -277,7 +280,7 @@
     "walk_entry_forward_mps": 0.2,
     "shared_reward_count": 27,
     "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "configured; no new training",
+    "status": "Previous mixed-command model_1998 evaluated; height reward and task gates updated, no training under new reward.",
     "front_only_regularizers": [
       "default_pos",
       "symmetric_joints"
@@ -289,6 +292,30 @@
       "torques",
       "dof_acc"
     ],
-    "clearance_change": "Deferred; existing two-foot clearance score and swing deficit unchanged."
+    "clearance_change": "Swing-only positive score deferred; existing two-foot score retained, with orientation-only gate. Swing deficit loses height gate."
+  },
+  "height_reward_and_task_gates": {
+    "height_target_m": 0.52,
+    "height_reward_width_m": 0.05,
+    "height_reward_weight": 1.5,
+    "upright_gate": "-projected_gravity_x > 0.94",
+    "orientation_only_terms": [
+      "tracking_lin_vel",
+      "tracking_ang_vel",
+      "contact",
+      "feet_clearance"
+    ],
+    "ungated_penalties": [
+      "feet_clearance_deficit"
+    ],
+    "zero_yaw_gate": "abs(command_yaw) < 0.1",
+    "legacy_height_score": "exp(-5*abs(height-0.52))",
+    "legacy_height_score_terms": [
+      "ang_xz",
+      "symmetric_joints",
+      "default_pos_reward"
+    ],
+    "heading_alignment_gate": "unchanged soft posture and height gate",
+    "validation_record": "doc/高度奖励收紧与任务门控解耦.md"
   }
 }

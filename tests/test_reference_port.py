@@ -38,7 +38,8 @@ def sample(cls):
     obj.num_envs, obj.num_dof, obj.device, obj.dt = 8, 12, "cpu", .02
     obj.cfg = SimpleNamespace(rewards=SimpleNamespace(
         **reference["reward_parameters"], tracking_lin_vel_sigma=reference["reward_parameters"]["tracking_sigma"],
-        tracking_ang_vel_sigma=reference["reward_parameters"]["tracking_sigma"]))
+        tracking_ang_vel_sigma=reference["reward_parameters"]["tracking_sigma"],
+        base_height_reward_width=.05, task_upright_cos_min=.94))
     obj.episode_length_buf = torch.tensor([1, 7, 13, 21, 31, 51, 61, 71])
     obj.root_states = torch.zeros(8, 13)
     obj.root_states[:, 2] = .52
@@ -46,7 +47,7 @@ def sample(cls):
     obj.base_lin_vel = torch.randn(8, 3)
     obj.base_ang_vel = torch.randn(8, 3)
     obj.commands = torch.randn(8, 3)
-    obj.projected_gravity = torch.randn(8, 3)
+    obj.projected_gravity = torch.tensor([-1., 0., 0.]).expand(8, 3).clone()
     obj.target_gravity = torch.tensor([-1., 0., 0.])
     obj.torques = torch.randn(8, 12)
     obj.dof_vel, obj.last_dof_vel = torch.randn(8, 12), torch.randn(8, 12)
@@ -89,6 +90,13 @@ class ReferencePortTests(unittest.TestCase):
                 text = text.replace("self.cfg.rewards.tracking_sigma", "self.cfg.rewards.tracking_lin_vel_sigma")
             if name == "_reward_tracking_ang_vel":
                 text = text.replace("self.cfg.rewards.tracking_sigma", "self.cfg.rewards.tracking_ang_vel_sigma")
+            if name in ("_reward_tracking_lin_vel", "_reward_tracking_ang_vel"):
+                text = text.replace("(self.rew_hanstand>0.70)", "self._task_upright_gate()")
+            if name == "_reward_base_height":
+                text = text.replace(
+                    "return torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)*5)",
+                    "return torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)"
+                    "/ self.cfg.rewards.base_height_reward_width)")
             if name == "_reward_default_pos":
                 text = text.replace("self.dof_pos - self.descire_joint_pos",
                                     "self.dof_pos[:, :6] - self.descire_joint_pos[:6]")
@@ -142,17 +150,35 @@ class ReferencePortTests(unittest.TestCase):
         obj.dof_pos[:, 3] = .2
         torch.testing.assert_close(obj._reward_symmetric_joints(), torch.full((8,), .4))
 
-    def test_height_gate_is_independent_between_environments(self):
+    def test_tracking_orientation_gate_is_independent_of_height_and_other_environments(self):
         obj = sample(ported)
         obj.base_lin_vel.zero_()
+        obj.base_ang_vel.zero_()
         obj.commands.zero_()
-        obj.root_states[1:, 2] = 0.
+        obj.root_states[:, 2] = torch.tensor([.52, .425, .35, .6, .425, .425, .425, .425])
+        obj.projected_gravity[4:, 0] = torch.tensor([-.94, -.939, 0., 1.])
         obj._reward_base_height()
-        reward = obj._reward_tracking_lin_vel()
-        self.assertEqual(1., reward[0].item())
-        self.assertTrue(torch.equal(reward[1:], torch.zeros(7)))
+        expected = torch.tensor([1., 1., 1., 1., 0., 0., 0., 0.])
+        torch.testing.assert_close(obj._reward_tracking_lin_vel(), expected)
+        torch.testing.assert_close(obj._reward_tracking_ang_vel(), expected)
+        # Tightening the height reward must not tighten task or legacy gates.
+        legacy_score = obj.rew_hanstand.clone()
+        obj.cfg.rewards.base_height_reward_width = .01
+        obj._reward_base_height()
+        torch.testing.assert_close(obj._reward_tracking_lin_vel(), expected)
+        torch.testing.assert_close(obj.rew_hanstand, legacy_score)
 
-    def test_balance_linear_width_preserves_angular_reward_and_height_gate(self):
+    def test_height_reward_is_narrow_and_separate_from_legacy_height_score(self):
+        obj = sample(ported)
+        obj.root_states[:, 2] = torch.tensor([.52, .48, .425, .56, .615, .52, .52, .52])
+        expected = torch.tensor([1., .44932896, .14956862, .44932896, .14956862, 1., 1., 1.])
+        torch.testing.assert_close(obj._reward_base_height(), expected, atol=1e-6, rtol=1e-5)
+        torch.testing.assert_close(obj.rew_hanstand,
+                                  torch.exp(-5*(obj.root_states[:, 2]-.52).abs()))
+        self.assertGreater(obj.rew_hanstand[2].item(), .6)
+        self.assertLess(expected[2].item(), .15)
+
+    def test_balance_linear_width_preserves_angular_reward_and_orientation_gate(self):
         obj = sample(ported)
         obj.commands.zero_()
         obj.base_lin_vel.zero_()
@@ -168,11 +194,10 @@ class ReferencePortTests(unittest.TestCase):
                 obj.cfg.rewards.tracking_lin_vel_sigma = width
                 torch.testing.assert_close(obj._reward_tracking_lin_vel(), torch.tensor(values), atol=1e-6, rtol=1e-5)
                 torch.testing.assert_close(obj._reward_tracking_ang_vel(), original_angular)
-        obj.root_states[-1, 2] = 0.
-        obj._reward_base_height()
+        obj.projected_gravity[-1] = torch.tensor([0., 0., -1.])
         self.assertEqual(obj._reward_tracking_lin_vel()[-1].item(), 0.)
 
-    def test_balance_angular_width_preserves_linear_reward_axis_and_height_gate(self):
+    def test_balance_angular_width_preserves_linear_reward_axis_and_orientation_gate(self):
         obj = sample(ported)
         obj.commands.zero_()
         obj.base_ang_vel.zero_()
@@ -185,8 +210,7 @@ class ReferencePortTests(unittest.TestCase):
         torch.testing.assert_close(obj._reward_tracking_lin_vel(), original_linear)
         obj.base_ang_vel[:, 1:] = 10.
         torch.testing.assert_close(obj._reward_tracking_ang_vel(), expected, atol=1e-6, rtol=1e-5)
-        obj.root_states[-1, 2] = 0.
-        obj._reward_base_height()
+        obj.projected_gravity[-1] = torch.tensor([0., 0., -1.])
         self.assertEqual(obj._reward_tracking_ang_vel()[-1].item(), 0.)
 
     def test_stage_switch_preserves_shared_rewards_and_changes_command_distribution(self):
@@ -231,7 +255,7 @@ class ReferencePortTests(unittest.TestCase):
             self.assertEqual(command.resampling_time_range, (10., 10.))
             self.assertEqual(cfg.balance_gait_clock, "always")
 
-    def test_zero_yaw_penalty_world_axis_command_and_per_environment_gate(self):
+    def test_zero_yaw_penalty_world_axis_command_and_no_height_gate(self):
         path = ROOT / 'ry_go2_biped_walk_v20/gait_mdp.py'
         fn = next(n for n in ast.parse(path.read_text()).body
                   if isinstance(n, ast.FunctionDef) and n.name == 'balance_zero_yaw_l2')
@@ -240,11 +264,11 @@ class ReferencePortTests(unittest.TestCase):
         obj.robot.data.root_ang_vel_w[:, 2] = torch.tensor([0., .5, -.5, 1., 2., .5, .5, .5])
         obj.commands[5, 2] = .1  # strict boundary: nonzero-turn penalty disabled
         obj.commands[6, 2] = .05
-        obj.rew_hanstand[7] = .78  # strict per-env height gate
+        obj.rew_hanstand[7] = 0.  # Lowering the body must not disable this penalty.
         namespace = {'state': lambda _: obj}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), str(path), 'exec'), namespace)
         reward = namespace['balance_zero_yaw_l2'](None)
-        torch.testing.assert_close(reward, torch.tensor([0., .25, .25, 1., 4., 0., .2025, 0.]))
+        torch.testing.assert_close(reward, torch.tensor([0., .25, .25, 1., 4., 0., .2025, .25]))
         obj.robot.data.root_ang_vel_w[:, :2] = 100.
         torch.testing.assert_close(namespace['balance_zero_yaw_l2'](None), reward)
         # Mirror the axial yaw velocity and command: penalty must stay unchanged.
@@ -330,7 +354,7 @@ class ReferencePortTests(unittest.TestCase):
         target2, stance2 = stepping.step_targets(phase+.5)
         torch.testing.assert_close(stepping.clearance_deficit(height.flip(-1), target2, ~stance2), cost)
 
-    def test_shortfall_adapter_uses_sole_height_and_existing_per_env_gate(self):
+    def test_low_stance_keeps_step_signals_and_deficit_survives_orientation_gate(self):
         path = ROOT/'ry_go2_biped_walk_v20/gait_mdp.py'
         fn = next(n for n in ast.parse(path.read_text()).body
                   if isinstance(n, ast.FunctionDef) and n.name == 'balance_step_reward')
@@ -338,20 +362,25 @@ class ReferencePortTests(unittest.TestCase):
         positions[:,:,2] = .022
         positions[1,2,2] += .03
         s = SimpleNamespace(_get_phase=lambda:torch.full((3,),.25),num_envs=3,contact_foot_indices=[2,3],
-                            measured_heights=torch.zeros(3,1),rew_hanstand=torch.tensor([1.,1.,.69]),
+                            measured_heights=torch.zeros(3,1),rew_hanstand=torch.full((3,),.6),
+                            _task_upright_gate=lambda:torch.tensor([True,True,False]),
+                            contact_forces=torch.tensor([[[0.,0.,0.],[0.,0.,0.],[0.,0.,0.],[0.,0.,10.]]]).expand(3,4,3),
                             robot=SimpleNamespace(data=SimpleNamespace(body_pos_w=positions,
                                                                        body_quat_w=torch.zeros(3,4,4))))
         namespace = {'state':lambda _:s,'step_targets':stepping.step_targets,
                      'clearance_score':stepping.clearance_score,'clearance_deficit':stepping.clearance_deficit,
+                     'contact_score':stepping.contact_score,
                      'quat_apply':lambda quat,offset:offset}
         exec(compile(ast.Module(body=[fn],type_ignores=[]),str(path),'exec'),namespace)
         env = SimpleNamespace(num_envs=3,cfg=SimpleNamespace(balance_step_height=.06,balance_double_support_fraction=.2,
                                                    balance_clearance_width=.01))
         torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance_deficit'),
-                                   torch.tensor([1.,.25,0.]))
+                                   torch.tensor([1.,.25,1.]))
         expected = torch.tensor([(1.+torch.exp(torch.tensor(-6.)))/2,
                                  (1.+torch.exp(torch.tensor(-3.)))/2,0.])
         torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance'),expected)
+        torch.testing.assert_close(namespace['balance_step_reward'](env,'contact'),
+                                   torch.tensor([1.,1.,0.]))
 
     def test_shared_clock_survives_stop_start_and_supports_legacy_replay(self):
         import math

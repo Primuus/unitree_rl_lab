@@ -21,16 +21,20 @@ class ReferenceRewards:
         stance_mask[:, 1] = phase>=0.5
         return stance_mask
 
+    def _task_upright_gate(self):
+        """Orientation only: task rewards remain active in a low upright stance."""
+        return -self.projected_gravity[:, 0] > self.cfg.rewards.task_upright_cos_min
+
     def _reward_tracking_lin_vel(self):
         x_error = torch.square(self.commands[:, 0] + self.base_lin_vel[:, 2])#站立起来的话，本体的x轴对应世界系的z，本体z轴对应世界系的-x
         y_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1])
         # print(self.rew_hanstand,self.rew_hanstand.shape)
-        return torch.exp(-(y_error+x_error)/self.cfg.rewards.tracking_lin_vel_sigma)*(self.rew_hanstand>0.70)
+        return torch.exp(-(y_error+x_error)/self.cfg.rewards.tracking_lin_vel_sigma)*self._task_upright_gate()
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw) 
         ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 0])
-        return torch.exp(-ang_vel_error/self.cfg.rewards.tracking_ang_vel_sigma)*(self.rew_hanstand>0.70)
+        return torch.exp(-ang_vel_error/self.cfg.rewards.tracking_ang_vel_sigma)*self._task_upright_gate()
 
     def _reward_lin_vel_z(self):
         # Penalize z axis base linear velocity
@@ -61,8 +65,10 @@ class ReferenceRewards:
         # Penalize base height away from target
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
         # print(self.root_states[0,2])
+        # Keep the original score for untouched posture regularizers only.
         self.rew_hanstand=torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)*5)
-        return torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)*5)
+        return torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)
+                         / self.cfg.rewards.base_height_reward_width)
 
     def _reward_handstand_feet_on_air(self):
         """
