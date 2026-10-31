@@ -7,7 +7,9 @@ from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk import walk_mdp as
 from .reference_config import REFERENCE
 from .reference_rewards import ReferenceRewards
 from .robot_cfg import JOINT_NAMES, FOOT_NAMES, ROBOT_WEIGHT
-from .stepping_rewards import step_targets, clearance_score, clearance_deficit, contact_score, body_height_factor
+from .stepping_rewards import (
+    step_targets, clearance_score, clearance_deficit, contact_score, body_height_factor,
+    illegal_support, foot_support_quality, pair_contact_score, swing_height_score)
 
 
 class RewardState(ReferenceRewards):
@@ -16,6 +18,8 @@ class RewardState(ReferenceRewards):
         self.robot = env.scene["robot"]
         self.sensor = env.scene["contact_forces"]
         self.num_envs, self.device, self.num_dof = env.num_envs, env.device, 12
+        self.nonfoot_sensor_ids = [i for i, name in enumerate(self.sensor.body_names)
+                                   if name not in ("RL_foot", "RR_foot")]
         self.dt = env.step_dt
         self.joint_ids, names = self.robot.find_joints(JOINT_NAMES, preserve_order=True)
         if names != JOINT_NAMES:
@@ -78,7 +82,28 @@ def state(env):
 
 def reference_reward(env, name):
     value = getattr(state(env), "_reward_" + name)()
-    return torch.as_tensor(value, device=env.device).expand(env.num_envs)
+    value = torch.as_tensor(value, device=env.device).expand(env.num_envs)
+    if env.cfg.stage2_support and name in (
+            "tracking_lin_vel", "tracking_ang_vel", "handstand_feet_height_exp",
+            "default_pos_reward", "alive"):
+        value = value * stage2_support_quality(env)
+    return value
+
+
+def stage2_nonfoot_contact(env):
+    s = state(env)
+    history = s.sensor.data.net_forces_w_history[:, :, s.nonfoot_sensor_ids]
+    env._stage2_nonfoot_peak_forces = history.norm(dim=-1).amax(dim=1)
+    return illegal_support(history, env.cfg.nonfoot_contact_threshold)
+
+
+def stage2_support_quality(env):
+    s = state(env)
+    height = s.root_states[:, 2] - s.measured_heights.mean(-1)
+    rear_loads = s.contact_forces[:, s.contact_foot_indices, 2] / ROBOT_WEIGHT
+    return foot_support_quality(height, rear_loads, stage2_nonfoot_contact(env),
+                                env.cfg.support_height_low, env.cfg.support_height_full,
+                                env.cfg.support_load_target)
 
 
 def balance_zero_yaw_l2(env):
@@ -93,7 +118,8 @@ def balance_heading_alignment(env, sensor_cfg, std=0.6):
     """Original-project heading reward toward world +X (nominal reset heading)."""
     yaw = wm.upright_heading(env)
     error = torch.atan2(torch.sin(yaw), torch.cos(yaw))
-    return torch.exp(-(error / std).square()) * wm.posture_gate(env, sensor_cfg)
+    value = torch.exp(-(error / std).square()) * wm.posture_gate(env, sensor_cfg)
+    return value * stage2_support_quality(env) if env.cfg.stage2_support else value
 
 
 def balance_step_reward(env, name):
@@ -109,14 +135,19 @@ def balance_step_reward(env, name):
         height = (center[:, :, 2] - .022 - s.measured_heights.mean(-1, keepdim=True)).clamp(min=0.)
         if name == "feet_clearance":
             loads = s.contact_forces[:, ids, 2].clamp(min=0.) / ROBOT_WEIGHT
-            value = clearance_score(height, target, ~stance, loads, env.cfg.balance_clearance_width)
+            if env.cfg.stage2_support:
+                value = swing_height_score(height, target, ~stance, env.cfg.balance_clearance_width)
+            else:
+                value = clearance_score(height, target, ~stance, loads, env.cfg.balance_clearance_width)
         else:
             value = clearance_deficit(height, target, ~stance, env.cfg.balance_step_height)
     else:
         contact = s.contact_forces[:, s.contact_foot_indices, 2] > 1.0
-        value = contact_score(contact, stance)
+        value = pair_contact_score(contact, stance) if env.cfg.stage2_support else contact_score(contact, stance)
     if name == "feet_clearance_deficit":
         return value
+    if env.cfg.stage2_support:
+        return value * s._task_upright_gate() * stage2_support_quality(env)
     height = s.root_states[:, 2] - s.measured_heights.mean(-1)
     factor = body_height_factor(height, env.cfg.step_reward_height_low,
                                 env.cfg.step_reward_height_full, env.cfg.step_reward_height_min_factor)
@@ -183,7 +214,19 @@ def validate_layout(env):
               for name in env.reward_manager.active_terms}
     if active != expected:
         raise ValueError(f"Reward scales differ from reference/stage: {active}, {expected}")
-    return {"action_names": names, "native_joint_names": list(env.scene["robot"].joint_names),
+    return {"reward_profile": "stage2_foot_support_v1" if env.cfg.stage2_support else "balance_27",
+            "stage2_support": {"enabled": env.cfg.stage2_support,
+                "nonfoot_threshold_n": env.cfg.nonfoot_contact_threshold,
+                "contact_history_samples": env.scene["contact_forces"].cfg.history_length,
+                "nonfoot_sensor_bodies": [s.sensor.body_names[i] for i in s.nonfoot_sensor_ids],
+                "contact_scope": "all reported contacts, including self-contact",
+                "height_low_m": env.cfg.support_height_low, "height_full_m": env.cfg.support_height_full,
+                "rear_load_target_fraction": env.cfg.support_load_target,
+                "contact_mode": "complete_pair" if env.cfg.stage2_support else "per_foot_mean",
+                "major_gated_terms": ["tracking_lin_vel", "tracking_ang_vel",
+                    "handstand_feet_height_exp", "default_pos_reward", "alive", "heading_alignment",
+                    "contact", "feet_clearance"]},
+            "action_names": names, "native_joint_names": list(env.scene["robot"].joint_names),
             "observation_dims": dims, "reward_scales": active,
             "command_sampling": {
                 "forward_range_mps": env.cfg.commands.base_velocity.ranges.lin_vel_x,
@@ -200,13 +243,13 @@ def validate_layout(env):
                 "height_target_m": s.cfg.rewards.base_height_target,
                 "height_reward_width_m": s.cfg.rewards.base_height_reward_width,
                 "task_upright_cos_min": s.cfg.rewards.task_upright_cos_min,
-                "orientation_only_terms": ["tracking_lin_vel", "tracking_ang_vel"],
+                "orientation_only_terms": [] if env.cfg.stage2_support else ["tracking_lin_vel", "tracking_ang_vel"],
                 "orientation_and_height_terms": ["contact", "feet_clearance"],
-                "step_height_scaling": {
+                "step_height_scaling": {"mode": "stage2_support_quality" if env.cfg.stage2_support else "legacy_height_factor",
                     "low_m": env.cfg.step_reward_height_low,
                     "full_m": env.cfg.step_reward_height_full,
-                    "min_factor": env.cfg.step_reward_height_min_factor,
-                    "formula": "min_factor + (1-min_factor)*clamp((height-low)/(full-low),0,1)",
+                    "min_factor": 0.0 if env.cfg.stage2_support else env.cfg.step_reward_height_min_factor,
+                    "formula": "clamp((height-low)/(full-low),0,1)*clamp(sum(rear_loads)/0.8,0,1)*legal_contact" if env.cfg.stage2_support else "min_factor + (1-min_factor)*clamp((height-low)/(full-low),0,1)",
                 },
                 "ungated_penalties": ["feet_clearance_deficit"],
                 "zero_yaw_gate": "abs(command_yaw) < 0.1; no height gate",
@@ -225,8 +268,8 @@ def validate_layout(env):
             "balance_stepping": {"peak_height": env.cfg.balance_step_height,
                                  "double_support_fraction": env.cfg.balance_double_support_fraction,
                                  "clearance_width": env.cfg.balance_clearance_width,
-                    "clearance_mode": "swing_only_load_gated",
+                    "clearance_mode": "dense_swing_support_quality" if env.cfg.stage2_support else "swing_only_load_gated",
                     "load_normalization_weight_n": ROBOT_WEIGHT,
-                    "unload_gate": "sigmoid((0.15-load)*20)",
-                    "support_gate": "sigmoid((opposite_load-0.35)*12)",
+                    "unload_gate": None if env.cfg.stage2_support else "sigmoid((0.15-load)*20)",
+                    "support_gate": "stage2_support_quality" if env.cfg.stage2_support else "sigmoid((opposite_load-0.35)*12)",
                                  "cycle_time": s.cfg.rewards.cycle_time}}

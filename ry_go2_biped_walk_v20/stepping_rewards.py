@@ -37,3 +37,25 @@ def body_height_factor(height, low=0.43, full=0.50, min_factor=0.3):
     """Scale positive stepping rewards without removing low-stance feedback."""
     progress = ((height - low) / (full - low)).clamp(0.0, 1.0)
     return min_factor + (1.0 - min_factor) * progress
+
+
+def illegal_support(history, threshold=5.0):
+    """Any non-hind-foot contact in the complete control-step force history."""
+    return (history.norm(dim=-1) > threshold).any(dim=-1).any(dim=-1)
+
+
+def foot_support_quality(height, rear_loads, illegal, low=.43, full=.50, load_target=.8):
+    """Dense height and total hind-foot load quality; illegal contacts earn zero."""
+    height_score = ((height-low)/(full-low)).clamp(0., 1.)
+    support = (rear_loads.clamp(min=0.).sum(-1)/load_target).clamp(0., 1.)
+    return height_score * support * (~illegal)
+
+
+def pair_contact_score(contact, stance):
+    """A correct swing/support pair, rather than credit for either foot alone."""
+    return (contact == stance).all(-1).float()
+
+
+def swing_height_score(height, target, swing, width=.01):
+    """Dense swing height feedback without requiring unloading first."""
+    return (torch.exp(-(height-target).abs()/width)*swing).sum(-1)

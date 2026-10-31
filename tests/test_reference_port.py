@@ -218,12 +218,14 @@ class ReferencePortTests(unittest.TestCase):
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "configure_stage")
         namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": lambda: SimpleNamespace(
                          **{name: SimpleNamespace(weight=weight) for name, weight in reference["reward_scales"].items() if weight != 0}),
+                     "ReferenceTerminationsCfg": SimpleNamespace, "DoneTerm": SimpleNamespace,
                      "RewTerm": SimpleNamespace, "wm": SimpleNamespace(feet_slide_l2=object()),
                      "gm": SimpleNamespace(balance_step_reward=object(), balance_zero_yaw_l2=object(),
-                                           balance_heading_alignment=object()),
+                                           balance_heading_alignment=object(), stage2_nonfoot_contact=object()),
                      "REAR_BODIES": object(), "REAR_CONTACTS": object(), "SCANNER": object()}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<configure_stage>", "exec"), namespace)
-        cfg = SimpleNamespace(commands=SimpleNamespace(base_velocity=SimpleNamespace(ranges=SimpleNamespace())))
+        cfg = SimpleNamespace(scene=SimpleNamespace(contact_forces=SimpleNamespace()),
+                              commands=SimpleNamespace(base_velocity=SimpleNamespace(ranges=SimpleNamespace())))
         for stage, linear, angular in [("balance", .0025, .04), ("walk", .0025, .04), ("balance", .0025, .04)]:
             namespace["configure_stage"](cfg, stage)
             self.assertEqual((cfg.tracking_lin_vel_sigma, cfg.tracking_ang_vel_sigma), (linear, angular))
@@ -247,13 +249,16 @@ class ReferencePortTests(unittest.TestCase):
             self.assertIs(cfg.rewards.feet_clearance_deficit.func, namespace['gm'].balance_step_reward)
             self.assertEqual(len(vars(cfg.rewards)), 27)
             command = cfg.commands.base_velocity
-            self.assertEqual(command.ranges.lin_vel_x, (.05, .10) if stage == "balance" else (.2, .2))
+            self.assertEqual(command.ranges.lin_vel_x, (.05, .10) if stage == "balance" else (.05, .05))
             self.assertEqual(command.rel_standing_envs, .5 if stage == "balance" else 0.)
             self.assertEqual(command.ranges.lin_vel_y, (0., 0.))
             self.assertEqual(command.ranges.ang_vel_z, (0., 0.))
             self.assertFalse(command.heading_command)
             self.assertEqual(command.resampling_time_range, (10., 10.))
             self.assertEqual(cfg.balance_gait_clock, "always")
+            self.assertEqual(cfg.stage2_support, stage == "walk")
+            self.assertEqual(cfg.scene.contact_forces.history_length, 4 if stage == "walk" else 3)
+            self.assertEqual(hasattr(cfg.terminations, "nonfoot_contact"), stage == "walk")
 
     def test_zero_yaw_penalty_world_axis_command_and_no_height_gate(self):
         path = ROOT / 'ry_go2_biped_walk_v20/gait_mdp.py'
@@ -289,11 +294,15 @@ class ReferencePortTests(unittest.TestCase):
         namespace = {'torch': torch, 'wm': SimpleNamespace(
             upright_heading=lambda _: yaw, posture_gate=posture_gate)}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), str(path), 'exec'), namespace)
-        reward = namespace['balance_heading_alignment'](None, scanner)
+        env = SimpleNamespace(cfg=SimpleNamespace(stage2_support=False))
+        reward = namespace['balance_heading_alignment'](env, scanner)
         torch.testing.assert_close(reward, torch.tensor([1., .36787944, .36787944, .36787944,
                                                         1.240424e-12, 1.240424e-12, .25]))
         yaw *= -1
-        torch.testing.assert_close(namespace['balance_heading_alignment'](None, scanner), reward)
+        torch.testing.assert_close(namespace['balance_heading_alignment'](env, scanner), reward)
+        env.cfg.stage2_support = True
+        namespace['stage2_support_quality'] = lambda _: torch.full_like(reward, .5)
+        torch.testing.assert_close(namespace['balance_heading_alignment'](env, scanner), reward*.5)
 
     def test_hind_foot_slip_uses_contact_and_horizontal_velocity(self):
         path = ROOT / "ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py"
@@ -376,7 +385,7 @@ class ReferencePortTests(unittest.TestCase):
                      'contact_score':stepping.contact_score,'body_height_factor':stepping.body_height_factor,
                      'ROBOT_WEIGHT':10., 'quat_apply':lambda quat,offset:offset}
         exec(compile(ast.Module(body=[fn],type_ignores=[]),str(path),'exec'),namespace)
-        env = SimpleNamespace(num_envs=3,cfg=SimpleNamespace(balance_step_height=.06,balance_double_support_fraction=.2,
+        env = SimpleNamespace(num_envs=3,cfg=SimpleNamespace(stage2_support=False,balance_step_height=.06,balance_double_support_fraction=.2,
                                                    balance_clearance_width=.01, step_reward_height_low=.43,
                                                    step_reward_height_full=.50, step_reward_height_min_factor=.3))
         torch.testing.assert_close(namespace['balance_step_reward'](env,'feet_clearance_deficit'),
@@ -387,6 +396,31 @@ class ReferencePortTests(unittest.TestCase):
                                    expected * load_gate * torch.tensor([.3,.6,1.]))
         torch.testing.assert_close(namespace['balance_step_reward'](env,'contact'),
                                    torch.tensor([.3,.6,0.]))
+
+    def test_stage2_support_rejects_kneeling_airborne_and_transient_illegal_contact(self):
+        history = torch.zeros(5, 4, 3, 3)
+        history[3, 1, 2, 0] = 6.  # Contact disappeared before the final physics step.
+        illegal = stepping.illegal_support(history)
+        self.assertEqual(illegal.tolist(), [False, False, False, True, False])
+        height = torch.tensor([.52, .42, .52, .52, .465])
+        loads = torch.tensor([[0., 1.], [.5, .5], [0., 0.], [.5, .5], [.2, .2]])
+        quality = stepping.foot_support_quality(height, loads, illegal)
+        torch.testing.assert_close(quality, torch.tensor([1., 0., 0., 0., .25]))
+
+    def test_stage2_pair_contact_and_dense_six_cm_swing(self):
+        target, stance = stepping.step_targets(torch.tensor([.25, .75, 0.]))
+        torch.testing.assert_close(target, torch.tensor([[.06, 0.], [0., .06], [0., 0.]]))
+        planted = torch.ones_like(stance)
+        torch.testing.assert_close(stepping.pair_contact_score(planted, stance),
+                                   torch.tensor([0., 0., 1.]))
+        torch.testing.assert_close(stepping.pair_contact_score(stance, stance), torch.ones(3))
+        heights = torch.zeros_like(target)
+        low = stepping.swing_height_score(heights, target, ~stance)
+        heights[0, 0] = heights[1, 1] = .03
+        lifted = stepping.swing_height_score(heights, target, ~stance)
+        self.assertTrue((lifted[:2] > low[:2]).all())
+        torch.testing.assert_close(stepping.swing_height_score(target, target, ~stance),
+                                   torch.tensor([1., 1., 0.]))
 
     def test_swing_clearance_requires_load_transfer_and_ignores_support_height(self):
         target = torch.tensor([[.06, 0.]]).expand(5, 2)

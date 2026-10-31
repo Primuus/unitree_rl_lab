@@ -42,7 +42,8 @@
     "2026-10-31 user-approved: base_height = exp(-abs(height-0.52)/0.05), weight 1.5 retained; legacy exp(-5*abs(height-0.52)) score remains separate for untouched regularizers.",
     "2026-10-31 user-approved: tracking_lin_vel, tracking_ang_vel, phase contact and feet_clearance use only -projected_gravity_x > 0.94; feet_clearance_deficit and zero-yaw penalty no longer require body height.",
     "2026-10-31 user-approved after rollback: contact and feet_clearance additionally multiply 0.3+0.7*clamp((height-0.43)/0.07,0,1). Velocity tracking and penalties unchanged; this is a new adaptation, not an upstream formula.",
-    "2026-10-31 user-approved: feet_clearance sums scheduled swing-foot exponential scores times original-project V36 unload sigmoid((0.15-load)*20) and opposite support sigmoid((load-0.35)*12); normalized world-Z foot loads clamped to [0,2]. Existing sole height, width .01, orientation and height factors retained."
+    "2026-10-31 user-approved: feet_clearance sums scheduled swing-foot exponential scores times original-project V36 unload sigmoid((0.15-load)*20) and opposite support sigmoid((load-0.35)*12); normalized world-Z foot loads clamped to [0,2]. Existing sole height, width .01, orientation and height factors retained.",
+    "2026-10-31 user-approved stage2: non-hind-foot force >5N in four physics samples terminates; major positive rewards multiply legal contact, height progress (0.43 to 0.50m) and total positive hind-foot load / 0.8 body weights, clamped. Phase contact requires both feet to match. Swing positive feedback removes unload/opposite sigmoids; peak remains 0.06m. Balance and all 27 weights remain unchanged."
   ],
   "adapter_changes": [
     "Compute height gate from current state before evaluating terms",
@@ -210,7 +211,7 @@
       0,
       0
     ],
-    "notes": "User-approved phase targets shared by balance and walk: peak sole clearance 0.06 m, contact=0.9, clearance=1.0, deficit=-1.0. Positive scores require upright cosine >0.94; swing deficit has no height/orientation gate. Positive scores additionally use the user-approved smooth height factor: 30% at/below 0.43 m, 100% at/above 0.50 m. Positive clearance now sums swing feet only; double support contributes zero. No moving-command gate.",
+    "notes": "User-approved phase targets shared by balance and walk: peak sole clearance 0.06 m, contact=0.9, clearance=1.0, deficit=-1.0. Positive scores require upright cosine >0.94; swing deficit has no height/orientation gate. Positive scores additionally use the user-approved smooth height factor: 30% at/below 0.43 m, 100% at/above 0.50 m. Positive clearance now sums swing feet only; double support contributes zero. No moving-command gate. Stage2 overrides positive-score formulas as recorded under stage2_support; targets and weights remain shared.",
     "active_weights": {
       "feet_clearance": 1.0,
       "contact": 0.9,
@@ -272,20 +273,20 @@
     "symmetry": "Existing sin/cos sign flip shifts phase by half a cycle and swaps hind-foot targets"
   },
   "current_training": {
-    "stage": "balance",
-    "zero_probability": 0.5,
+    "stage": "walk",
+    "zero_probability": 0.0,
     "forward_range_mps": [
       0.05,
-      0.1
+      0.05
     ],
     "lateral_mps": 0.0,
     "yaw_radps": 0.0,
     "resampling_s": 10.0,
     "automatic_speed_curriculum": false,
-    "walk_entry_forward_mps": 0.2,
+    "walk_entry_forward_mps": 0.05,
     "shared_reward_count": 27,
     "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "The 750-update swing-load continuation completed but was rejected by the user. Default resume/export/evaluation baseline is model_2497; reward code retained; no new training.",
+    "status": "Stage2 continuation authorized; launch/evaluation records under logs/launches.",
     "front_only_regularizers": [
       "default_pos",
       "symmetric_joints"
@@ -297,8 +298,8 @@
       "torques",
       "dof_acc"
     ],
-    "clearance_change": "Swing-only score with original-project V36 unload/support gates; weight 1.0 retained. No event reward or PD change.",
-    "selected_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_09-53-03_balance_height_gate_continue500/model_2497.pt",
+    "clearance_change": "Stage2 dense swing score with support quality; legacy balance retains V36 load gates.",
+    "selected_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_04-13-39_balance_balance_clearance10_continue500/model_5990.pt",
     "rejected_runs": [
       {
         "run": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_11-05-14_balance_swing_load_continue750",
@@ -306,7 +307,10 @@
         "reason": "User rejected the 750-update training results after evaluation",
         "artifacts_retained": true
       }
-    ]
+    ],
+    "additional_updates": 500,
+    "num_envs": 4096,
+    "save_interval": 50
   },
   "height_reward_and_task_gates": {
     "height_target_m": 0.52,
@@ -338,7 +342,8 @@
       "full_m": 0.5,
       "min_factor": 0.3,
       "formula": "min_factor + (1-min_factor)*clamp((height-low)/(full-low),0,1)"
-    }
+    },
+    "scope": "Legacy balance; stage2_support overrides major positive gates."
   },
   "rollback": {
     "code_baseline": "6e3202d",
@@ -346,5 +351,37 @@
     "retained_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_09-53-03_balance_height_gate_continue500/model_2497.pt",
     "training_started": false,
     "record": "doc/回退至参考奖励对照前实现.md"
+  },
+  "stage2_support": {
+    "profile": "stage2_foot_support_v1",
+    "scope": "walk, retained during zero-command evaluation of this profile",
+    "height_low_m": 0.43,
+    "height_full_m": 0.5,
+    "rear_load_target_fraction": 0.8,
+    "formula": "clamp((h-.43)/.07,0,1)*clamp(sum(relu(rear_Fz))/robot_weight/.8,0,1)*legal_contact",
+    "termination": {
+      "excluded_bodies": [
+        "RL_foot",
+        "RR_foot"
+      ],
+      "threshold_n": 5.0,
+      "history_physics_steps": 4,
+      "scope": "all reported contacts, including self-contact"
+    },
+    "major_gated_terms": [
+      "tracking_lin_vel",
+      "tracking_ang_vel",
+      "handstand_feet_height_exp",
+      "default_pos_reward",
+      "alive",
+      "heading_alignment",
+      "contact",
+      "feet_clearance"
+    ],
+    "contact_formula": "all(actual_contact == phase_stance)*upright_gate*support_quality",
+    "clearance_formula": "sum(swing*exp(-abs(sole_height-target_height)/.01))*upright_gate*support_quality",
+    "peak_height_m": 0.06,
+    "no_unload_sigmoid": true,
+    "record": "doc/Stage2_足端支撑与长训策略续训500轮.md"
   }
 }

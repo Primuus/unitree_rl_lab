@@ -91,6 +91,12 @@ def configure_stage(cfg, stage):
         raise ValueError(f"Unknown stage: {stage}")
     cfg.stage = stage
     cfg.rewards = ReferenceRewardsCfg()
+    cfg.stage2_support = stage == "walk"
+    cfg.terminations = ReferenceTerminationsCfg()
+    cfg.scene.contact_forces.history_length = 4 if cfg.stage2_support else 3
+    cfg.scene.contact_forces.update_period = 0.0
+    if cfg.stage2_support:
+        cfg.terminations.nonfoot_contact = DoneTerm(func=gm.stage2_nonfoot_contact)
     cfg.tracking_lin_vel_sigma = 0.0025
     cfg.tracking_ang_vel_sigma = 0.04
     cfg.balance_gait_clock = "always"
@@ -109,7 +115,7 @@ def configure_stage(cfg, stage):
     cfg.rewards.heading_alignment = RewTerm(
         func=gm.balance_heading_alignment, weight=1.5,
         params={"sensor_cfg": SCANNER, "std": 0.6})
-    cfg.commands.base_velocity.ranges.lin_vel_x = (0.05, 0.10) if stage == "balance" else (0.2, 0.2)
+    cfg.commands.base_velocity.ranges.lin_vel_x = (0.05, 0.10) if stage == "balance" else (0.05, 0.05)
     cfg.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
     cfg.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
     cfg.commands.base_velocity.rel_standing_envs = 0.5 if stage == "balance" else 0.0
@@ -120,6 +126,11 @@ def configure_stage(cfg, stage):
 @configclass
 class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     stage: str = "balance"
+    stage2_support: bool = False
+    nonfoot_contact_threshold: float = 5.0
+    support_height_low: float = .43
+    support_height_full: float = .50
+    support_load_target: float = .8
     tracking_lin_vel_sigma: float = 0.0025
     tracking_ang_vel_sigma: float = 0.04
     base_height_reward_width: float = 0.05

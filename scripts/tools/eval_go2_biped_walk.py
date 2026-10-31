@@ -59,7 +59,13 @@ def main():
     args.out.parent.mkdir(parents=True, exist_ok=True)
     cfg = parse_env_cfg(args.task, device=args.device, num_envs=args.num_envs,
                         entry_point_key="play_env_cfg_entry_point")
-    configure_stage(cfg, args.stage)
+    profile = None
+    if args.checkpoint:
+        provenance = json.loads((args.checkpoint.parent/"params/provenance.json").read_text())
+        profile = provenance.get("layout", {}).get("reward_profile")
+    configure_stage(cfg, "walk" if profile == "stage2_foot_support_v1" else args.stage)
+    # Evaluation mode selects commands; the checkpoint retains its support constraints.
+    cfg.stage = args.stage
     if args.gait_clock != "auto":
         cfg.balance_gait_clock = args.gait_clock
     elif args.checkpoint:

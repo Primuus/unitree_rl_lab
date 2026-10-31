@@ -10,14 +10,15 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
-def fixture(stage):
+def fixture(stage, stage2=False):
     force = torch.zeros(1, 4, 3)
     force[:, :, 2] = torch.tensor([0., 0., 20., 20.])
-    sensor = NS(data=NS(net_forces_w=force), find_bodies=lambda *a, **k: ([0, 1], []))
+    sensor = NS(body_names=["FL_foot","FR_foot","RL_foot","RR_foot"],
+                data=NS(net_forces_w=force,net_forces_w_history=force[:,None].repeat(1,4,1,1)), find_bodies=lambda *a, **k: ([0, 1], []))
     data = NS(root_pos_w=torch.tensor([[0., 0., .52]]), root_lin_vel_w=torch.zeros(1, 3),
               root_ang_vel_w=torch.zeros(1, 3), projected_gravity_b=torch.tensor([[-1., 0., 0.]]),
               body_pos_w=torch.zeros(1, 4, 3), body_lin_vel_w=torch.zeros(1, 4, 3))
-    raw = NS(num_envs=1, device="cpu", step_dt=.02, cfg=NS(stage=stage), yaw=torch.zeros(1),
+    raw = NS(num_envs=1, device="cpu", step_dt=.02, cfg=NS(stage=stage,stage2_support=stage2,nonfoot_contact_threshold=5.), yaw=torch.zeros(1),
              termination_manager=NS(terminated=torch.tensor([False]), active_terms=[]),
              command_manager=NS(get_command=lambda _: torch.zeros(1, 3)))
     wm = NS(upright_heading=lambda _: raw.yaw, heading_lin_vel=lambda _: data.root_lin_vel_w,
@@ -63,6 +64,18 @@ class BalanceMetricsTests(unittest.TestCase):
             m.update(step, torch.tensor([False]))
         self.assertTrue(m.result(True)['balance_acceptance_passed'])
         self.assertFalse(m.result(False)['balance_acceptance_passed'])
+
+    def test_stage2_zero_evaluation_rejects_low_pose_and_nonfoot_support(self):
+        m = fixture("balance", stage2=True)
+        m.robot.data.root_pos_w[:, 2] = .44
+        # Low knee support is below termination threshold but must reduce support share.
+        m.sensor.data.net_forces_w[:, 0, 2] = 4.
+        for step in range(1000):
+            m.update(step, torch.tensor([False]))
+        report = m.result(True)["balance_acceptance_reports"][0]
+        self.assertIn("target_height", report["failed_checks"])
+        self.assertIn("foot_support", report["failed_checks"])
+        self.assertFalse(report["passed"])
 
     def test_full_turn_is_not_hidden_by_angle_wrapping(self):
         m = fixture('balance')
