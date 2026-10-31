@@ -2,11 +2,12 @@
 from types import SimpleNamespace
 
 import torch
-from isaaclab.utils.math import euler_xyz_from_quat
+from isaaclab.utils.math import euler_xyz_from_quat, quat_apply
 from ry_unitree_rl_lab.tasks.locomotion.robots.go2_biped_walk import walk_mdp as wm
 from .reference_config import REFERENCE
 from .reference_rewards import ReferenceRewards
 from .robot_cfg import JOINT_NAMES, FOOT_NAMES
+from .stepping_rewards import step_targets, clearance_score, clearance_deficit, contact_score
 
 
 class RewardState(ReferenceRewards):
@@ -26,7 +27,11 @@ class RewardState(ReferenceRewards):
         self.contact_foot_indices = self.feet_indices[2:]
         self.sensor_ids, _ = self.sensor.find_bodies(self.robot.body_names, preserve_order=True)
         self.penalised_contact_indices, _ = self.robot.find_bodies([".*thigh", ".*calf"])
-        self.cfg = SimpleNamespace(rewards=SimpleNamespace(**REFERENCE["reward_parameters"]))
+        self.cfg = SimpleNamespace(rewards=SimpleNamespace(
+            **REFERENCE["reward_parameters"], tracking_lin_vel_sigma=env.cfg.tracking_lin_vel_sigma,
+            tracking_ang_vel_sigma=env.cfg.tracking_ang_vel_sigma,
+            base_height_reward_width=env.cfg.base_height_reward_width,
+            task_upright_cos_min=env.cfg.task_upright_cos_min))
         self.target_gravity = torch.tensor([-1.0, 0.0, 0.0], device=self.device)
         self.descire_joint_pos = torch.tensor(
             [REFERENCE["desired_joint_angles"][name] for name in JOINT_NAMES], device=self.device)
@@ -75,6 +80,43 @@ def reference_reward(env, name):
     value = getattr(state(env), "_reward_" + name)()
     return torch.as_tensor(value, device=env.device).expand(env.num_envs)
 
+
+def balance_zero_yaw_l2(env):
+    """World-Z zero-turn penalty, independent of body height."""
+    s = state(env)
+    command = s.commands[:, 2]
+    error = command - s.robot.data.root_ang_vel_w[:, 2]
+    return error.square() * (command.abs() < .1)
+
+
+def balance_heading_alignment(env, sensor_cfg, std=0.6):
+    """Original-project heading reward toward world +X (nominal reset heading)."""
+    yaw = wm.upright_heading(env)
+    error = torch.atan2(torch.sin(yaw), torch.cos(yaw))
+    return torch.exp(-(error / std).square()) * wm.posture_gate(env, sensor_cfg)
+
+
+def balance_step_reward(env, name):
+    s = state(env)
+    target, stance = step_targets(s._get_phase(), env.cfg.balance_step_height,
+                                  env.cfg.balance_double_support_fraction)
+    if name in ("feet_clearance", "feet_clearance_deficit"):
+        data = s.robot.data
+        ids = s.contact_foot_indices
+        # Original Go2 URDF foot collision: sphere radius .022, local center (-.002,0,0).
+        offset = data.body_pos_w[:, ids].new_tensor([-.002, 0., 0.]).expand(env.num_envs, 2, 3)
+        center = data.body_pos_w[:, ids] + quat_apply(data.body_quat_w[:, ids], offset)
+        height = (center[:, :, 2] - .022 - s.measured_heights.mean(-1, keepdim=True)).clamp(min=0.)
+        if name == "feet_clearance":
+            value = clearance_score(height, target, env.cfg.balance_clearance_width)
+        else:
+            value = clearance_deficit(height, target, ~stance, env.cfg.balance_step_height)
+    else:
+        contact = s.contact_forces[:, s.contact_foot_indices, 2] > 1.0
+        value = contact_score(contact, stance)
+    if name == "feet_clearance_deficit":
+        return value
+    return value * s._task_upright_gate()
 
 
 def reset_reference_history(env, env_ids):
@@ -127,14 +169,16 @@ def validate_layout(env):
     mirror_data(env, actions=torch.zeros(env.num_envs, 12, device=env.device))
     s = state(env)
     expected = {k: v for k, v in REFERENCE["reward_scales"].items() if v != 0}
+    expected["contact"] = 0.9
+    expected["feet_clearance"] = 1.0
+    expected["feet_clearance_deficit"] = -1.0
+    expected["foot_slip"] = -0.5
+    expected["tracking_ang_vel_zero"] = -0.2
+    expected["heading_alignment"] = 1.5
     active = {name: env.reward_manager.get_term_cfg(name).weight
               for name in env.reward_manager.active_terms}
     if active != expected:
-        raise ValueError(f"Reward scales differ from upstream: {active}, {expected}")
-    for name in active:
-        term = env.reward_manager.get_term_cfg(name)
-        if term.func is not reference_reward or term.params != {"name": name}:
-            raise ValueError(f"Non-reference reward adapter: {name}")
+        raise ValueError(f"Reward scales differ from reference/stage: {active}, {expected}")
     return {"action_names": names, "native_joint_names": list(env.scene["robot"].joint_names),
             "observation_dims": dims, "reward_scales": active,
             "command_sampling": {
@@ -146,21 +190,28 @@ def validate_layout(env):
                 "heading_command": env.cfg.commands.base_velocity.heading_command,
             },
             "front_foot_ids": s.feet_name_reward_indices, "hind_foot_ids": s.contact_foot_indices,
-            "reward_profile": "upstream_handstand_23",
-            "tracking_lin_vel_sigma": s.cfg.rewards.tracking_sigma,
-            "tracking_ang_vel_sigma": s.cfg.rewards.tracking_sigma,
+            "tracking_lin_vel_sigma": s.cfg.rewards.tracking_lin_vel_sigma,
+            "tracking_ang_vel_sigma": s.cfg.rewards.tracking_ang_vel_sigma,
             "height_reward_and_task_gates": {
                 "height_target_m": s.cfg.rewards.base_height_target,
-                "formula": "exp(-5 * abs(height - 0.52))",
-                "gate": "mean(height_score over all environments) > 0.70",
-                "update": "current control-step state before all reward terms",
+                "height_reward_width_m": s.cfg.rewards.base_height_reward_width,
+                "task_upright_cos_min": s.cfg.rewards.task_upright_cos_min,
+                "orientation_only_terms": ["tracking_lin_vel", "tracking_ang_vel", "contact", "feet_clearance"],
+                "ungated_penalties": ["feet_clearance_deficit"],
+                "zero_yaw_gate": "abs(command_yaw) < 0.1; no height gate",
+                "legacy_height_score_terms": ["ang_xz", "symmetric_joints", "default_pos_reward"],
             },
             "gait_clock": {"mode": env.cfg.balance_gait_clock,
                            "period_s": s.cfg.rewards.cycle_time},
-            "reference_stepping": {
-                "peak_height_m": s.cfg.rewards.target_foot_height,
-                "height_measurement": "foot body world Z minus 0.02 m",
-                "clearance_formula": "sum(exp(-10*abs(height-target))*swing_mask) * height_gate",
-                "contact_formula": "exactly one rear foot Fz > 1 N, times height_gate",
-                "half_cycle_boundary": "upstream phase == 0.5 has both swing masks active",
-            }}
+            "balance_yaw_constraints": {
+                "zero_yaw_axis": "world_z", "zero_yaw_weight": -0.2,
+                "zero_command_threshold_radps": 0.1, "zero_yaw_height_gate": None,
+                "heading_target_rad": 0.0, "heading_direction": "world_positive_x",
+                "heading_weight": active["heading_alignment"],
+                "heading_std_rad": env.reward_manager.get_term_cfg("heading_alignment").params["std"],
+                "heading_gate": "upright_score(std=0.7) * clamp((height-0.35)/0.15,0,1)",
+            },
+            "balance_stepping": {"peak_height": env.cfg.balance_step_height,
+                                 "double_support_fraction": env.cfg.balance_double_support_fraction,
+                                 "clearance_width": env.cfg.balance_clearance_width,
+                                 "cycle_time": s.cfg.rewards.cycle_time}}

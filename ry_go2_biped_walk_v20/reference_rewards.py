@@ -6,7 +6,7 @@ import torch
 
 
 class ReferenceRewards:
-    """Unmodified reward formulas from the pinned upstream handstand source."""
+    """Upstream formulas with documented gates, phase boundary and independent tracking widths."""
 
     def _get_phase(self):
         cycle_time = self.cfg.rewards.cycle_time
@@ -18,19 +18,23 @@ class ReferenceRewards:
         phase = self._get_phase()
         stance_mask = torch.zeros((self.num_envs, 2), device=self.device)
         stance_mask[:, 0] = phase<0.5
-        stance_mask[:, 1] = phase>0.5
+        stance_mask[:, 1] = phase>=0.5
         return stance_mask
+
+    def _task_upright_gate(self):
+        """Orientation only: task rewards remain active in a low upright stance."""
+        return -self.projected_gravity[:, 0] > self.cfg.rewards.task_upright_cos_min
 
     def _reward_tracking_lin_vel(self):
         x_error = torch.square(self.commands[:, 0] + self.base_lin_vel[:, 2])#站立起来的话，本体的x轴对应世界系的z，本体z轴对应世界系的-x
         y_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1])
-        # print(torch.mean(self.rew_hanstand),self.rew_hanstand.shape)
-        return torch.exp(-(y_error+x_error)/self.cfg.rewards.tracking_sigma)*(torch.mean(self.rew_hanstand)>0.70)
+        # print(self.rew_hanstand,self.rew_hanstand.shape)
+        return torch.exp(-(y_error+x_error)/self.cfg.rewards.tracking_lin_vel_sigma)*self._task_upright_gate()
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw) 
         ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 0])
-        return torch.exp(-ang_vel_error/self.cfg.rewards.tracking_sigma)*(torch.mean(self.rew_hanstand)>0.70)
+        return torch.exp(-ang_vel_error/self.cfg.rewards.tracking_ang_vel_sigma)*self._task_upright_gate()
 
     def _reward_lin_vel_z(self):
         # Penalize z axis base linear velocity
@@ -61,8 +65,10 @@ class ReferenceRewards:
         # Penalize base height away from target
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
         # print(self.root_states[0,2])
-        self.rew_hanstand=torch.mean(torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)*5))
-        return torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)*5)
+        # Keep the original score for untouched posture regularizers only.
+        self.rew_hanstand=torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)*5)
+        return torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target)
+                         / self.cfg.rewards.base_height_reward_width)
 
     def _reward_handstand_feet_on_air(self):
         """
@@ -85,8 +91,8 @@ class ReferenceRewards:
         return  torch.sum(torch.square(self.last_actions - self.actions), dim=1)
 
     def _reward_default_pos(self):
-        # Penalize motion at zero commands
-        return torch.sum(torch.abs(self.dof_pos - self.descire_joint_pos), dim=1)
+        # Keep front-leg posture in both command modes; hind legs may alternate.
+        return torch.sum(torch.abs(self.dof_pos[:, :6] - self.descire_joint_pos[:6]), dim=1)
 
     def _reward_default_hip_pos(self):
         """
@@ -115,7 +121,7 @@ class ReferenceRewards:
         # print(rew[0],torch.sum(torch.abs(left_feet_height-target_height),dim=1)[0])
         rew+=torch.exp(-torch.abs(right_feet_height-target_height)*10)*swing_mask[:,1]
         # print(rew.shape,left_feet_height.shape)
-        return rew*(torch.mean(self.rew_hanstand)>0.70)
+        return rew*(self.rew_hanstand>0.70)
 
     def _reward_ang_xz(self):
         return torch.abs(self.base_euler_xyz[:,0])*(self.rew_hanstand>0.70)
@@ -125,14 +131,13 @@ class ReferenceRewards:
         return (torch.sum(contact,dim=1)==1)*(self.rew_hanstand>0.70)
 
     def _reward_symmetric_joints(self):
-        # 左右关节对称（参考 go2_trot 的对称设置）：前后两对腿都参与
+        # Front-leg instantaneous symmetry only; hind legs alternate out of phase.
         # hip 左右正方向定义相反，比较前取反；thigh/calf 直接比较
         # dof 顺序 FL,FR,RL,RR：前对 FL-FR(0,1)，后对 RL-RR(2,3)
         dof = self.dof_pos.clone().view(self.num_envs, 4, int(self.num_dof/4))
         # Multiply the right side hips by -1 to match the sign of the left side:
         dof[:,1,0] *= -1   # FR hip
-        dof[:,3,0] *= -1   # RR hip
-        err = torch.sum(torch.abs(dof[:,0,:] - dof[:,1,:]),axis=1) + torch.sum(torch.abs(dof[:,2,:] - dof[:,3,:]),axis=1)
+        err = torch.sum(torch.abs(dof[:,0,:] - dof[:,1,:]),axis=1)
         return err*(self.rew_hanstand>0.70)
 
     def _reward_orientation_symmetry(self):
@@ -157,7 +162,7 @@ class ReferenceRewards:
 
     def _reward_default_pos_reward(self):
         # Penalize motion at zero commands
-        return torch.exp(-torch.sum(torch.abs(self.dof_pos - self.descire_joint_pos)[:,:6], dim=1))*(torch.mean(self.rew_hanstand)>0.70)
+        return torch.exp(-torch.sum(torch.abs(self.dof_pos - self.descire_joint_pos)[:,:6], dim=1))*(self.rew_hanstand>0.70)
 
     def _reward_dof_pos_limits(self):
         # Penalize dof positions too close to the limit

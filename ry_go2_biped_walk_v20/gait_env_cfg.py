@@ -91,7 +91,24 @@ def configure_stage(cfg, stage):
         raise ValueError(f"Unknown stage: {stage}")
     cfg.stage = stage
     cfg.rewards = ReferenceRewardsCfg()
+    cfg.tracking_lin_vel_sigma = 0.0025
+    cfg.tracking_ang_vel_sigma = 0.04
     cfg.balance_gait_clock = "always"
+    for name in ("contact", "feet_clearance"):
+        setattr(cfg.rewards, name, RewTerm(func=gm.balance_step_reward,
+                weight=REFERENCE["reward_scales"][name], params={"name": name}))
+    cfg.rewards.contact.weight = 0.9
+    cfg.rewards.feet_clearance.weight = 1.0
+    cfg.rewards.feet_clearance_deficit = RewTerm(
+        func=gm.balance_step_reward, weight=-1.0, params={"name": "feet_clearance_deficit"})
+    cfg.rewards.foot_slip = RewTerm(
+        func=wm.feet_slide_l2, weight=-0.5,
+        params={"asset_cfg": REAR_BODIES, "sensor_cfg": REAR_CONTACTS})
+    cfg.rewards.tracking_ang_vel_zero = RewTerm(
+        func=gm.balance_zero_yaw_l2, weight=-0.2)
+    cfg.rewards.heading_alignment = RewTerm(
+        func=gm.balance_heading_alignment, weight=1.5,
+        params={"sensor_cfg": SCANNER, "std": 0.6})
     cfg.commands.base_velocity.ranges.lin_vel_x = (0.05, 0.10) if stage == "balance" else (0.2, 0.2)
     cfg.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
     cfg.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
@@ -103,7 +120,14 @@ def configure_stage(cfg, stage):
 @configclass
 class Go2BipedGaitV20EnvCfg(Go2BipedWalkEnvCfg):
     stage: str = "balance"
+    tracking_lin_vel_sigma: float = 0.0025
+    tracking_ang_vel_sigma: float = 0.04
+    base_height_reward_width: float = 0.05
+    task_upright_cos_min: float = 0.94
+    balance_step_height: float = 0.06
     balance_gait_clock: str = "always"
+    balance_double_support_fraction: float = 0.2
+    balance_clearance_width: float = 0.01
     scene: ReferenceSceneCfg = ReferenceSceneCfg(num_envs=4096, env_spacing=3.0)
     actions: ReferenceActionsCfg = ReferenceActionsCfg()
     observations: V20ObservationsCfg = V20ObservationsCfg()
