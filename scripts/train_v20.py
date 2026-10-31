@@ -68,6 +68,9 @@ def main():
     runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=str(log_dir), device=args.device)
     if args.resume:
         runner.load(str(args.resume), load_optimizer=True)
+        # RSL-RL restores Adam state but leaves the adaptive learning-rate scalar unchanged.
+        runner.alg.learning_rate = runner.alg.optimizer.param_groups[0]["lr"]
+        print("RESUME_LEARNING_RATE", runner.alg.learning_rate, flush=True)
     policy = runner.alg.policy
     params = log_dir / "params"
     params.mkdir(exist_ok=True)
@@ -90,6 +93,7 @@ def main():
         "task": TASK, "implementation": "12-joint-reference-handstand",
         "stage": args.stage, "resume": str(args.resume) if args.resume else None,
         "initialization": "resume" if args.resume else "scratch",
+        "learning_rate_at_start": runner.alg.learning_rate,
         "layout": layout, "seed": args.seed, "source_sha256": hashes,
     }, indent=2))
     runner.learn(num_learning_iterations=args.max_iterations, init_at_random_ep_len=True)
