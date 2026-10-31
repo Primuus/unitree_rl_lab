@@ -155,8 +155,9 @@ class ReferencePortTests(unittest.TestCase):
         namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": lambda: SimpleNamespace(
                          **{name: SimpleNamespace(weight=weight) for name, weight in reference["reward_scales"].items() if weight != 0}),
                      "RewTerm": SimpleNamespace, "wm": SimpleNamespace(feet_slide_l2=object()),
-                     "gm": SimpleNamespace(balance_step_reward=object()),
-                     "REAR_BODIES": object(), "REAR_CONTACTS": object()}
+                     "gm": SimpleNamespace(balance_step_reward=object(), balance_zero_yaw_l2=object(),
+                                           balance_heading_alignment=object()),
+                     "REAR_BODIES": object(), "REAR_CONTACTS": object(), "SCANNER": object()}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<configure_stage>", "exec"), namespace)
         cfg = SimpleNamespace(commands=SimpleNamespace(base_velocity=SimpleNamespace(ranges=SimpleNamespace())))
         for stage, linear, angular in [("balance", .0025, .04), ("walk", .25, .25), ("balance", .0025, .04)]:
@@ -172,10 +173,60 @@ class ReferencePortTests(unittest.TestCase):
                 self.assertIs(term.func, namespace["wm"].feet_slide_l2)
                 self.assertIs(term.params["asset_cfg"], namespace["REAR_BODIES"])
                 self.assertIs(term.params["sensor_cfg"], namespace["REAR_CONTACTS"])
+                self.assertEqual(cfg.rewards.tracking_ang_vel_zero.weight, -.2)
+                self.assertIs(cfg.rewards.tracking_ang_vel_zero.func, namespace['gm'].balance_zero_yaw_l2)
+                self.assertEqual(cfg.rewards.heading_alignment.weight, 1.5)
+                self.assertIs(cfg.rewards.heading_alignment.func, namespace['gm'].balance_heading_alignment)
+                self.assertEqual(cfg.rewards.heading_alignment.params['std'], .6)
+                self.assertIs(cfg.rewards.heading_alignment.params['sensor_cfg'], namespace['SCANNER'])
+                self.assertEqual(len(vars(cfg.rewards)), 26)
             else:
                 self.assertFalse(hasattr(cfg.rewards, "foot_slip"))
+                self.assertFalse(hasattr(cfg.rewards, "tracking_ang_vel_zero"))
+                self.assertFalse(hasattr(cfg.rewards, "heading_alignment"))
+                self.assertEqual(len(vars(cfg.rewards)), 23)
                 self.assertEqual(cfg.rewards.contact.weight, .3)
                 self.assertEqual(cfg.rewards.feet_clearance.weight, .4)
+
+    def test_zero_yaw_penalty_world_axis_command_and_per_environment_gate(self):
+        path = ROOT / 'ry_go2_biped_walk_v20/gait_mdp.py'
+        fn = next(n for n in ast.parse(path.read_text()).body
+                  if isinstance(n, ast.FunctionDef) and n.name == 'balance_zero_yaw_l2')
+        obj = SimpleNamespace(commands=torch.zeros(8, 3), rew_hanstand=torch.ones(8),
+                              robot=SimpleNamespace(data=SimpleNamespace(root_ang_vel_w=torch.zeros(8, 3))))
+        obj.robot.data.root_ang_vel_w[:, 2] = torch.tensor([0., .5, -.5, 1., 2., .5, .5, .5])
+        obj.commands[5, 2] = .1  # strict boundary: nonzero-turn penalty disabled
+        obj.commands[6, 2] = .05
+        obj.rew_hanstand[7] = .78  # strict per-env height gate
+        namespace = {'state': lambda _: obj}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(path), 'exec'), namespace)
+        reward = namespace['balance_zero_yaw_l2'](None)
+        torch.testing.assert_close(reward, torch.tensor([0., .25, .25, 1., 4., 0., .2025, 0.]))
+        obj.robot.data.root_ang_vel_w[:, :2] = 100.
+        torch.testing.assert_close(namespace['balance_zero_yaw_l2'](None), reward)
+        # Mirror the axial yaw velocity and command: penalty must stay unchanged.
+        obj.robot.data.root_ang_vel_w[:, 2] *= -1
+        obj.commands[:, 2] *= -1
+        torch.testing.assert_close(namespace['balance_zero_yaw_l2'](None), reward)
+
+    def test_heading_alignment_wraps_and_preserves_original_posture_gate(self):
+        path = ROOT / 'ry_go2_biped_walk_v20/gait_mdp.py'
+        fn = next(n for n in ast.parse(path.read_text()).body
+                  if isinstance(n, ast.FunctionDef) and n.name == 'balance_heading_alignment')
+        yaw = torch.tensor([0., .6, -.6, 2*torch.pi+.6, torch.pi, -torch.pi, 0.])
+        gate = torch.tensor([1., 1., 1., 1., 1., 1., .25])
+        scanner = object()
+        def posture_gate(env, sensor):
+            self.assertIs(sensor, scanner)
+            return gate
+        namespace = {'torch': torch, 'wm': SimpleNamespace(
+            upright_heading=lambda _: yaw, posture_gate=posture_gate)}
+        exec(compile(ast.Module(body=[fn], type_ignores=[]), str(path), 'exec'), namespace)
+        reward = namespace['balance_heading_alignment'](None, scanner)
+        torch.testing.assert_close(reward, torch.tensor([1., .36787944, .36787944, .36787944,
+                                                        1.240424e-12, 1.240424e-12, .25]))
+        yaw *= -1
+        torch.testing.assert_close(namespace['balance_heading_alignment'](None, scanner), reward)
 
     def test_hind_foot_slip_uses_contact_and_horizontal_velocity(self):
         path = ROOT / "ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py"

@@ -53,7 +53,8 @@
     "User-approved balance tracking denominators: linear=0.0025, angular=0.04; walk linear and angular remain 0.25; tracking reward weights unchanged",
     "User-approved balance-only foot_slip=-0.5 inherited from original /workspace/unitree_rl_lab; 24 balance rewards, 23 walk rewards; reference weights retained except user-approved balance contact and feet_clearance overrides",
     "User explicitly raises balance phase-contact weight from 0.3 to 0.9; clearance remains 0.4, walk contact remains 0.3",
-    "Subsequent user request raises only balance feet_clearance from 0.4 to 1.0; contact remains 0.9, walk clearance remains 0.4"
+    "Subsequent user request raises only balance feet_clearance from 0.4 to 1.0; contact remains 0.9, walk clearance remains 0.4",
+    "User-approved balance additions: tracking_ang_vel_zero=-0.2 from reference Leggedstand (world-Z adaptation), heading_alignment=+1.5 with std=0.6 from recorded original V7/V20 formula; 26 balance terms, walk unchanged. Heading target fixed world +X; observations unchanged."
   ],
   "policy_source": {
     "init_noise_std": 1.0,
@@ -206,5 +207,34 @@
       "feet_clearance": 1.0,
       "contact": 0.9
     }
+  },
+  "balance_yaw_constraints": {
+    "tracking_ang_vel_zero": {
+      "weight": -0.2,
+      "source": "https://github.com/yusongmin1/My_unitree_go2_gym/blob/main/legged_gym/envs/Go2_Stand/Go2_Leggedstand/Go2_Leggedstand.py#L916",
+      "config_source": "https://github.com/yusongmin1/My_unitree_go2_gym/blob/main/legged_gym/envs/Go2_Stand/Go2_Leggedstand/Go2_Leggedstand_Config.py",
+      "formula": "(command_yaw - world_angular_velocity_z)**2 * (height_score > 0.78) * (abs(command_yaw) < 0.1)",
+      "adaptations": [
+        "World Z replaces the source front-support body -X convention",
+        "Per-environment gate replaces upstream batch-mean height gate",
+        "height_score uses current 0.52 m height target, rather than upstream Leggedstand 0.47 m"
+      ],
+      "runtime_function": "gait_mdp.balance_zero_yaw_l2"
+    },
+    "heading_alignment": {
+      "weight": 1.5,
+      "std_rad": 0.6,
+      "target_heading_rad": 0.0,
+      "target_direction": "world_positive_x",
+      "source_record": "doc/原工程固定前腿与站立奖励分析.md",
+      "source_scope": "Recorded original /workspace/unitree_rl_lab V7/V20 formula and weights; server unavailable for fresh source read",
+      "formula": "exp(-(wrap_to_pi(upright_heading)/0.6)**2) * posture_gate",
+      "posture_gate": "exp(-sum((projected_gravity-[-1,0,0])**2)/0.7**2) * clamp((height-0.35)/0.15,0,1)",
+      "runtime_function": "gait_mdp.balance_heading_alignment",
+      "heading_axis": "horizontal projection of body -Z",
+      "target_observability": "fixed world +X; existing absolute heading sin/cos at Actor 50:52; no reset-specific hidden target"
+    },
+    "stage": "balance",
+    "runtime_validation": "Local 21 reward/metric tests passed; server synchronization and Isaac runtime validation pending; not trained"
   }
 }

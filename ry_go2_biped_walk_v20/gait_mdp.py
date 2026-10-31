@@ -79,6 +79,21 @@ def reference_reward(env, name):
     return torch.as_tensor(value, device=env.device).expand(env.num_envs)
 
 
+def balance_zero_yaw_l2(env):
+    """Leggedstand zero-turn penalty, adapted to WORLD Z and per-env height gates."""
+    s = state(env)
+    command = s.commands[:, 2]
+    error = command - s.robot.data.root_ang_vel_w[:, 2]
+    return error.square() * (s.rew_hanstand > .78) * (command.abs() < .1)
+
+
+def balance_heading_alignment(env, sensor_cfg, std=0.6):
+    """Original-project heading reward toward world +X (nominal reset heading)."""
+    yaw = wm.upright_heading(env)
+    error = torch.atan2(torch.sin(yaw), torch.cos(yaw))
+    return torch.exp(-(error / std).square()) * wm.posture_gate(env, sensor_cfg)
+
+
 def balance_step_reward(env, name):
     s = state(env)
     target, stance = step_targets(s._get_phase(), env.cfg.balance_step_height,
@@ -144,6 +159,8 @@ def validate_layout(env):
         expected["contact"] = 0.9
         expected["feet_clearance"] = 1.0
         expected["foot_slip"] = -0.5
+        expected["tracking_ang_vel_zero"] = -0.2
+        expected["heading_alignment"] = 1.5
     active = {name: env.reward_manager.get_term_cfg(name).weight
               for name in env.reward_manager.active_terms}
     if active != expected:
@@ -153,6 +170,14 @@ def validate_layout(env):
             "front_foot_ids": s.feet_name_reward_indices, "hind_foot_ids": s.contact_foot_indices,
             "tracking_lin_vel_sigma": s.cfg.rewards.tracking_lin_vel_sigma,
             "tracking_ang_vel_sigma": s.cfg.rewards.tracking_ang_vel_sigma,
+            "balance_yaw_constraints": {
+                "zero_yaw_axis": "world_z", "zero_yaw_weight": -0.2,
+                "zero_command_threshold_radps": 0.1, "zero_yaw_height_gate": 0.78,
+                "heading_target_rad": 0.0, "heading_direction": "world_positive_x",
+                "heading_weight": active["heading_alignment"],
+                "heading_std_rad": env.reward_manager.get_term_cfg("heading_alignment").params["std"],
+                "heading_gate": "upright_score(std=0.7) * clamp((height-0.35)/0.15,0,1)",
+            } if env.cfg.stage == "balance" else None,
             "balance_stepping": {"peak_height": env.cfg.balance_step_height,
                                  "double_support_fraction": env.cfg.balance_double_support_fraction,
                                  "clearance_width": env.cfg.balance_clearance_width,
