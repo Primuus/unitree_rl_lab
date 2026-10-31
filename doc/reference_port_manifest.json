@@ -289,7 +289,7 @@
     "automatic_speed_curriculum": false,
     "walk_entry_forward_mps": 1.0,
     "eval_commands": "separate fixed zero, 0.5 and 1.0 m/s",
-    "status": "User authorized 500 continuation updates from model_6988 at fixed 1.0 m/s; 4096 envs, GPU0, save every 50, automatic evaluation after training. Linear tracking denominator 0.25.",
+    "status": "Completed 500 updates at 1.0 m/s: model_7487. Evaluations complete: target command stable but speed -0.02270 m/s and zero qualified touchdowns; zero/0.5 commands had 16/16 and 15/16 contact failures. No further training or local deployment change.",
     "front_only_regularizers": [
       "default_pos",
       "symmetric_joints"
