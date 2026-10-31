@@ -38,3 +38,5 @@ docker exec -it -w /workspace/ry_unitree_rl_lab isaac-record bash
 当前12动作MuJoCo部署关闭fuse_static并指定训练base的observation_com；本机MuJoCo 3.8.1自动融合会改变旋转固定转子的组合质心/惯性。保持关闭，勿仅凭总质量一致恢复融合。验证与残留后退/抖动见doc/Stage2_MuJoCo倾倒排查与固定关节融合修正.md。
 
 最新用户要求：检查奖励贡献并加重未形成步态惩罚。stage2默认v2，欠抬脚−1→−3，新增逐脚相位错误−2（两脚接触状态不匹配比例），两项均不受高度/直立/承重门控。保持6 cm和20%双支撑及其他权重，balance不变。此次未启动训练。评估auto按checkpoint恢复v1/v2；current显式使用最新规则。详见doc/Stage2_奖励贡献审计与步态惩罚加强.md。
+
+用户随后已授权继续训练500轮：从model_6489恢复，使用stage2 v2的28项奖励，4096环境、GPU0、固定前进0.05 m/s、6 cm峰值，每50轮保存；结束自动评估零命令和0.05/0.10 m/s。恢复优化器和学习率，预计最终标签model_6988。进度以logs/launches/*stage2_gait_penalty_continue500.json为准。

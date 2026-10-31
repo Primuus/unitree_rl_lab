@@ -286,7 +286,7 @@
     "automatic_speed_curriculum": false,
     "walk_entry_forward_mps": 0.05,
     "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "500-update stage2 continuation finished at model_6489. Gait penalties strengthened after audit; no further training started.",
+    "status": "User authorized 500 more updates from model_6489 with stage2 v2; coordinator logs/launches/*stage2_gait_penalty_continue500.json records actual progress.",
     "front_only_regularizers": [
       "default_pos",
       "symmetric_joints"
@@ -314,7 +314,8 @@
     "reward_counts": {
       "balance": 27,
       "walk": 28
-    }
+    },
+    "expected_final_iteration": 6988
   },
   "height_reward_and_task_gates": {
     "height_target_m": 0.52,
@@ -398,7 +399,7 @@
     "peak_height_m": 0.06,
     "double_support_fraction": 0.2,
     "unchanged_balance_reward_count": 27,
-    "training_started": false,
-    "record": "doc/Stage2_奖励贡献审计与步态惩罚加强.md"
+    "record": "doc/Stage2_奖励贡献审计与步态惩罚加强.md",
+    "continuation_authorized": true
   }
 }
