@@ -141,6 +141,7 @@ def validate_layout(env):
     s = state(env)
     expected = {k: v for k, v in REFERENCE["reward_scales"].items() if v != 0}
     if env.cfg.stage == "balance":
+        expected["contact"] = 0.9
         expected["foot_slip"] = -0.5
     active = {name: env.reward_manager.get_term_cfg(name).weight
               for name in env.reward_manager.active_terms}

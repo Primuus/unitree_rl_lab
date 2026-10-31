@@ -152,7 +152,8 @@ class ReferencePortTests(unittest.TestCase):
     def test_stage_switch_restores_tracking_widths(self):
         tree = ast.parse((ROOT / "ry_go2_biped_walk_v20/gait_env_cfg.py").read_text())
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "configure_stage")
-        namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": SimpleNamespace,
+        namespace = {"REFERENCE": reference, "ReferenceRewardsCfg": lambda: SimpleNamespace(
+                         **{name: SimpleNamespace(weight=weight) for name, weight in reference["reward_scales"].items() if weight != 0}),
                      "RewTerm": SimpleNamespace, "wm": SimpleNamespace(feet_slide_l2=object()),
                      "gm": SimpleNamespace(balance_step_reward=object()),
                      "REAR_BODIES": object(), "REAR_CONTACTS": object()}
@@ -165,7 +166,7 @@ class ReferencePortTests(unittest.TestCase):
                 for name in ("contact", "feet_clearance"):
                     term = getattr(cfg.rewards, name)
                     self.assertIs(term.func, namespace["gm"].balance_step_reward)
-                    self.assertEqual(term.weight, reference["reward_scales"][name])
+                    self.assertEqual(term.weight, .9 if name == "contact" else .4)
                 term = cfg.rewards.foot_slip
                 self.assertEqual(term.weight, -0.5)
                 self.assertIs(term.func, namespace["wm"].feet_slide_l2)
@@ -173,6 +174,8 @@ class ReferencePortTests(unittest.TestCase):
                 self.assertIs(term.params["sensor_cfg"], namespace["REAR_CONTACTS"])
             else:
                 self.assertFalse(hasattr(cfg.rewards, "foot_slip"))
+                self.assertEqual(cfg.rewards.contact.weight, .3)
+                self.assertEqual(cfg.rewards.feet_clearance.weight, .4)
 
     def test_hind_foot_slip_uses_contact_and_horizontal_velocity(self):
         path = ROOT / "ry_unitree_rl_lab/tasks/locomotion/robots/go2_biped_walk/walk_mdp.py"
