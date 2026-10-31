@@ -120,7 +120,7 @@ def configure_stage(cfg, stage, gait_penalties=True):
     cfg.rewards.heading_alignment = RewTerm(
         func=gm.balance_heading_alignment, weight=1.5,
         params={"sensor_cfg": SCANNER, "std": 0.6})
-    cfg.commands.base_velocity.ranges.lin_vel_x = (0.05, 0.10) if stage == "balance" else (0.5, 0.5)
+    cfg.commands.base_velocity.ranges.lin_vel_x = (0.05, 0.10) if stage == "balance" else (1.0, 1.0)
     cfg.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
     cfg.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
     cfg.commands.base_velocity.rel_standing_envs = 0.5 if stage == "balance" else 0.0

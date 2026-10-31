@@ -45,7 +45,8 @@
     "2026-10-31 user-approved: feet_clearance sums scheduled swing-foot exponential scores times original-project V36 unload sigmoid((0.15-load)*20) and opposite support sigmoid((load-0.35)*12); normalized world-Z foot loads clamped to [0,2]. Existing sole height, width .01, orientation and height factors retained.",
     "2026-10-31 user-approved stage2: non-hind-foot force >5N in four physics samples terminates; major positive rewards multiply legal contact, height progress (0.43 to 0.50m) and total positive hind-foot load / 0.8 body weights, clamped. Phase contact requires both feet to match. Swing positive feedback removes unload/opposite sigmoids; peak remains 0.06m. Balance and all 27 weights remain unchanged.",
     "2026-10-31 user-approved after measured reward audit: stage2 v2 raises feet_clearance_deficit from -1 to -3 and adds phase_contact_error=-2 times mean(actual_contact != phase_stance). Both penalties are ungated by height/orientation/support. Preserve 6cm peak and 20% double support. This added penalty is a user-approved adaptation, not a copied upstream term.",
-    "2026-10-31 user approved walk linear tracking denominator 0.0025 -> reference tracking_sigma 0.25 for the fixed 0.5 m/s command. Balance linear remains 0.0025; angular remains 0.04. Weights, 6cm peak, 1.6s cycle and PPO unchanged. Auto evaluation restores saved stage2 linear width; current explicitly uses present width. No training launched."
+    "2026-10-31 user approved walk linear tracking denominator 0.0025 -> reference tracking_sigma 0.25 for the fixed 0.5 m/s command. Balance linear remains 0.0025; angular remains 0.04. Weights, 6cm peak, 1.6s cycle and PPO unchanged. Auto evaluation restores saved stage2 linear width; current explicitly uses present width. No training launched.",
+    "2026-10-31 user changed walk command from fixed 0.5 to 1.0 m/s and authorized 500 continuation updates from model_6988. Reward widths/weights, 6cm peak, 1.6s cycle and PPO unchanged."
   ],
   "adapter_changes": [
     "Compute height gate from current state before evaluating terms",
@@ -279,16 +280,16 @@
     "stage": "walk",
     "zero_probability": 0.0,
     "forward_range_mps": [
-      0.5,
-      0.5
+      1.0,
+      1.0
     ],
     "lateral_mps": 0.0,
     "yaw_radps": 0.0,
     "resampling_s": 10.0,
     "automatic_speed_curriculum": false,
-    "walk_entry_forward_mps": 0.5,
-    "eval_commands": "separate fixed zero, 0.05 and 0.10 m/s",
-    "status": "model_6988 completed training at 0.05 m/s. User changed next walk target to 0.5 m/s; not yet trained. Diagnostic probe and convergence report available.",
+    "walk_entry_forward_mps": 1.0,
+    "eval_commands": "separate fixed zero, 0.5 and 1.0 m/s",
+    "status": "User authorized 500 continuation updates from model_6988 at fixed 1.0 m/s; 4096 envs, GPU0, save every 50, automatic evaluation after training. Linear tracking denominator 0.25.",
     "front_only_regularizers": [
       "default_pos",
       "symmetric_joints"
@@ -301,7 +302,7 @@
       "dof_acc"
     ],
     "clearance_change": "Stage2 dense swing score with support quality; legacy balance retains V36 load gates.",
-    "selected_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_13-16-56_walk_stage2_foot_support_continue500/model_6489.pt",
+    "selected_checkpoint": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_14-00-27_walk_stage2_gait_penalty_continue500/model_6988.pt",
     "rejected_runs": [
       {
         "run": "logs/rsl_rl/ry_unitree_go2_handstand/2026-10-31_11-05-14_balance_swing_load_continue750",
